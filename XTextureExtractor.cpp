@@ -54,6 +54,7 @@ XPLMDataRef gAcfNotes = NULL;
 #define AIRCRAFT_FF767 1
 #define AIRCRAFT_XP737 2
 #define AIRCRAFT_ZB738 3
+#define AIRCRAFT_FF757 4
 #define AIRCRAFT_UNKNOWN -1
 int get_aircraft_type(void) {
 	char filename[256];
@@ -84,6 +85,9 @@ int get_aircraft_type(void) {
 	if (!strcmp(filename, "767-300er_xp11.acf")) {
 		log_printf("Found Flight Factor 767 match based on filename\n");
 		return AIRCRAFT_FF767;
+	} else if (!strcmp(filename, "757-200_xp11.acf")) {
+		log_printf("Found Flight Factor 757 match based on filename\n");
+		return AIRCRAFT_FF757;
 	} else if (strstr(notes, "zibomod") != NULL) {
 		log_printf("Found ZiboMod 738 based on acf_notes\n");
 		return AIRCRAFT_ZB738;
@@ -119,10 +123,16 @@ static void find_last_match_in_texture(GLint start_texture_id)
 	case AIRCRAFT_FF767:
 		fw = 2048;
 		fh = 2048;
-		// ff = 33779;
 		ff = 32856;
 		strcpy(cockpit_aircraft_name, "FF767");
 		log_printf("FF767 Detected 2048x2048\n");
+		break;
+	case AIRCRAFT_FF757:
+		fw = 2048;
+		fh = 2048;
+		ff = 32856;
+		strcpy(cockpit_aircraft_name, "FF757");
+		log_printf("FF757 Detected 2048x2048\n");
 		break;
 	case AIRCRAFT_XP737:
 		fw = 2048;
@@ -324,6 +334,11 @@ void dump_debug()
 		fh = 2048;
 		log_printf("FF767 Detected 2048x2048\n");
 		break;
+	case AIRCRAFT_FF757:
+		fw = 2048;
+		fh = 2048;
+		log_printf("FF757 Detected 2048x2048\n");
+		break;
 	case AIRCRAFT_XP737:
 		fw = 2048;
 		fh = 1024;
@@ -345,7 +360,7 @@ void dump_debug()
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &tf);
 
 		// XP737 panel is "fbo-list panel texture 1-fbo" at 2048x1024
-		// FF767 panel is "fbo-list panel texture 1-fbo" at 2048x2048
+		// FF7*7 panel is "fbo-list panel texture 1-fbo" at 2048x2048
 		// ZB738 panel is "fbo-list panel texture 1-fbo" at 2048x2048
 		if ((tw == fw) && (th == fh)) {
 			log_printf("texture id=%d, width=%d, height=%d iformat=%d\n", i, tw, th, tf);
@@ -460,6 +475,7 @@ void	draw(XPLMWindowID in_window_id, void * in_refcon)
 	const int topInset = 20;
 	switch (cockpit_aircraft) {
 	case AIRCRAFT_FF767:
+	case AIRCRAFT_FF757:
 		if (in_window_id == g_window[0]) {
 			// Navigation display
 			XPLMBindTexture2d(cockpit_texture_id, 0);
