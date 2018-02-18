@@ -373,6 +373,17 @@ void dump_debug()
 }
 
 
+void draw_texture_rect(float leftX, float topY, float rightX, float botY, float maxX, float maxY, int l, int t, int r, int b) {
+	XPLMBindTexture2d(cockpit_texture_id, 0);
+	glBegin(GL_QUADS);
+	glTexCoord2f( leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t); // Top left
+	glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t); // Top right
+	glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b); // Bottom right
+	glTexCoord2f( leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b); // Bottom left
+	glEnd();
+}
+
+
 void	draw(XPLMWindowID in_window_id, void * in_refcon)
 {
 	float col_white[] = {1.0, 1.0, 1.0};
@@ -476,250 +487,25 @@ void	draw(XPLMWindowID in_window_id, void * in_refcon)
 	switch (cockpit_aircraft) {
 	case AIRCRAFT_FF767:
 	case AIRCRAFT_FF757:
-		if (in_window_id == g_window[0]) {
-			// Navigation display
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 18;
-			float topY = 372;
-			float rightX = 412;
-			float botY = 841;
-			float maxX = 2048;
-			float maxY = 2048;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
-		else if (in_window_id == g_window[1]) {
-			// HSI display
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 18;
-			float topY = 11;
-			float rightX = 418;
-			float botY = 319;
-			float maxX = 2048;
-			float maxY = 2048;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
-		else if (in_window_id == g_window[2]) {
-			// EICAS display
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 442;
-			float topY = 7;
-			float rightX = 926;
-			float botY = 412;
-			float maxX = 2048;
-			float maxY = 2048;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
-		else if (in_window_id == g_window[3]) {
-			// 2nd extra display (not shown by default in FF767)
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 943;
-			float topY = 9;
-			float rightX = 1427;
-			float botY = 414;
-			float maxX = 2048;
-			float maxY = 2048;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
-		else if (in_window_id == g_window[4]) {
-			// Misc display
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 434;
-			float topY = 420;
-			float rightX = 1576;
-			float botY = 854;
-			float maxX = 2048;
-			float maxY = 2048;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
+		if      (in_window_id == g_window[0]) draw_texture_rect(  18,  372,  412,  841,   2048, 2048, l, t - topInset, r, b); // ND
+		else if (in_window_id == g_window[1]) draw_texture_rect(  18,   11,  418,  319,   2048, 2048, l, t - topInset, r, b); // HSI
+		else if (in_window_id == g_window[2]) draw_texture_rect( 442,    7,  926,  412,   2048, 2048, l, t - topInset, r, b); // EICAS
+		else if (in_window_id == g_window[3]) draw_texture_rect( 943,    9, 1427,  414,   2048, 2048, l, t - topInset, r, b); // EICAS-2
+		else if (in_window_id == g_window[4]) draw_texture_rect( 434,  420, 1576,  854,   2048, 2048, l, t - topInset, r, b); // MISC
 		break;
 	case AIRCRAFT_ZB738:
-		if (in_window_id == g_window[0]) {
-			// Navigation display
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 524;
-			float topY = 1550;
-			float rightX = 1018;
-			float botY = 2038;
-			float maxX = 2048;
-			float maxY = 2048;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
-		else if (in_window_id == g_window[1]) {
-			// HSI display
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 9;
-			float topY = 1538;
-			float rightX = 516;
-			float botY = 2043;
-			float maxX = 2048;
-			float maxY = 2048;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
-		else if (in_window_id == g_window[2]) {
-			// EICAS display
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 1040;
-			float topY = 1550;
-			float rightX = 1527;
-			float botY = 2028;
-			float maxX = 2048;
-			float maxY = 2048;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
-		else if (in_window_id == g_window[3]) {
-			// Extra EICAS display
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 1533;
-			float topY = 1551;
-			float rightX = 2038;
-			float botY = 2037;
-			float maxX = 2048;
-			float maxY = 2048;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
-		else if (in_window_id == g_window[4]) {
-			// CDU Display
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 10;
-			float topY = 544;
-			float rightX = 540;
-			float botY = 1023;
-			float maxX = 2048;
-			float maxY = 2048;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
+		if      (in_window_id == g_window[0]) draw_texture_rect( 524, 1550, 1018, 2038,   2048, 2048, l, t - topInset, r, b); // ND
+		else if (in_window_id == g_window[1]) draw_texture_rect(   9, 1538,  516, 2043,   2048, 2048, l, t - topInset, r, b); // HSI
+		else if (in_window_id == g_window[2]) draw_texture_rect(1040, 1550, 1527, 2028,   2048, 2048, l, t - topInset, r, b); // EICAS
+		else if (in_window_id == g_window[3]) draw_texture_rect(1533, 1551, 2038, 2037,   2048, 2048, l, t - topInset, r, b); // EICAS-2
+		else if (in_window_id == g_window[4]) draw_texture_rect(  10,  544,  540, 1023,   2048, 2048, l, t - topInset, r, b); // CDU
 		break;
 	case AIRCRAFT_XP737:
-		if (in_window_id == g_window[0]) {
-			// Navigation display
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 516;
-			float topY = 521;
-			float rightX = 1026;
-			float botY = 968;
-			float maxX = 2048;
-			float maxY = 1024;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
-		else if (in_window_id == g_window[1]) {
-			// HSI display
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 18;
-			float topY = 514;
-			float rightX = 514;
-			float botY = 1019;
-			float maxX = 2048;
-			float maxY = 1024;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
-		else if (in_window_id == g_window[2]) {
-			// EICAS display
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 1042;
-			float topY = 524;
-			float rightX = 1549;
-			float botY = 1012;
-			float maxX = 2048;
-			float maxY = 1024;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
-		else if (in_window_id == g_window[3]) {
-			// Extra EICAS display
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 1558;
-			float topY = 521;
-			float rightX = 2041;
-			float botY = 1013;
-			float maxX = 2048;
-			float maxY = 1024;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
-		else if (in_window_id == g_window[4]) {
-			// Misc Display
-			XPLMBindTexture2d(cockpit_texture_id, 0);
-			glBegin(GL_QUADS);
-			float leftX = 1557;
-			float topY = 0;
-			float rightX = 2046;
-			float botY = 530;
-			float maxX = 2048;
-			float maxY = 1024;
-			glTexCoord2f(leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t - topInset); // Top left
-			glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t - topInset); // Top right
-			glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b);    // Bottom right
-			glTexCoord2f(leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b);    // Bottom left
-			glEnd();
-		}
+		if      (in_window_id == g_window[0]) draw_texture_rect( 516,  521, 1026,  968,   2048, 1024, l, t - topInset, r, b); // ND
+		else if (in_window_id == g_window[1]) draw_texture_rect(  18,  514,  514, 1019,   2048, 1024, l, t - topInset, r, b); // HSI
+		else if (in_window_id == g_window[2]) draw_texture_rect(1042,  524, 1549, 1012,   2048, 1024, l, t - topInset, r, b); // EICAS
+		else if (in_window_id == g_window[3]) draw_texture_rect(1558,  521, 2041, 1013,   2048, 1024, l, t - topInset, r, b); // EICAS-2
+		else if (in_window_id == g_window[4]) draw_texture_rect(1557,    0, 2046,  530,   2048, 1024, l, t - topInset, r, b); // MISC
 		break;
 	default:
 		// Draw an X on each window for unknown aircraft
