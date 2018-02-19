@@ -43,10 +43,10 @@ import android.view.SoundEffectConstants
 import java.net.UnknownHostException
 
 
-class MainActivity : Activity(), TCPClient.OnTCPEvent, MulticastReceiver.OnReceiveMulticast {
+class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastReceiver.OnReceiveMulticast {
 
     private var becn_listener: MulticastReceiver? = null
-    private var tcp_extplane: TCPClient? = null
+    private var tcp_extplane: TCPBitmapClient? = null
     private var connectAddress: String? = null
     private var manualAddress: String = ""
     private var manualInetAddress: InetAddress? = null
@@ -87,10 +87,11 @@ class MainActivity : Activity(), TCPClient.OnTCPEvent, MulticastReceiver.OnRecei
                 val iy = ((motionEvent.y * textureImage.getDrawable().intrinsicHeight) / textureImage.height).toInt()
                 Log.d(Const.TAG, "ImageClick = ${ix},${iy}, RawClick = ${motionEvent.x},${motionEvent.y} from Image ${textureImage.getDrawable().intrinsicWidth},${textureImage.getDrawable().intrinsicHeight} -> ${textureImage.width},${textureImage.height}")
 
-                // If the help is visible, hide it on any kind of click
+                // Toggle the help text
                 if (aboutText.visibility == View.VISIBLE) {
                     aboutText.visibility = View.INVISIBLE
-                    return@setOnTouchListener true
+                } else {
+                    aboutText.visibility = View.VISIBLE
                 }
             }
             return@setOnTouchListener true
@@ -219,7 +220,7 @@ class MainActivity : Activity(), TCPClient.OnTCPEvent, MulticastReceiver.OnRecei
     }
 
     private fun resetDisplay() {
-        // TODO: Need to reset the display when we detect the connection is down
+        textureImage.setImageBitmap(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888))
     }
 
     private fun restartNetworking() {
@@ -250,8 +251,8 @@ class MainActivity : Activity(), TCPClient.OnTCPEvent, MulticastReceiver.OnRecei
                 Log.d(Const.TAG, "Manual address $manualAddress specified, skipping any auto-detection")
                 check(tcp_extplane == null)
                 connectAddress = manualAddress
-                setConnectionStatus("Manual TCP connect", "", "Needs ExtPlane plugin", "$connectAddress:${Const.TCP_PLUGIN_PORT}")
-                tcp_extplane = TCPClient(manualInetAddress!!, Const.TCP_PLUGIN_PORT, this)
+                setConnectionStatus("Manual TCP connect", "Connection in progress", "Needs XTextureExtractor plugin", "$connectAddress:${Const.TCP_PLUGIN_PORT}")
+                tcp_extplane = TCPBitmapClient(manualInetAddress!!, Const.TCP_PLUGIN_PORT, this)
             }
         }
     }
@@ -305,17 +306,16 @@ class MainActivity : Activity(), TCPClient.OnTCPEvent, MulticastReceiver.OnRecei
 
         check(tcp_extplane == null)
         Log.d(Const.TAG, "Making connection to $connectAddress:${Const.TCP_PLUGIN_PORT}")
-        tcp_extplane = TCPClient(source, Const.TCP_PLUGIN_PORT, this)
+        tcp_extplane = TCPBitmapClient(source, Const.TCP_PLUGIN_PORT, this)
     }
 
-    override fun onConnectTCP(tcpRef: TCPClient) {
+    override fun onConnectTCP(tcpRef: TCPBitmapClient) {
         if (tcpRef != tcp_extplane)
             return
-        // We will wait for EXTPLANE 1 in onReceiveTCP, so don't send the requests just yet
-        setConnectionStatus("Established TCP", "Waiting for ExtPlane", "Needs ExtPlane plugin", "$connectAddress:${Const.TCP_PLUGIN_PORT}")
+        // The socket isn't fully connected, so don't update the UI yet
     }
 
-    override fun onDisconnectTCP(tcpRef: TCPClient) {
+    override fun onDisconnectTCP(tcpRef: TCPBitmapClient) {
         if (tcpRef != tcp_extplane)
             return
         Log.d(Const.TAG, "onDisconnectTCP(): Closing down TCP connection and will restart")
@@ -323,26 +323,21 @@ class MainActivity : Activity(), TCPClient.OnTCPEvent, MulticastReceiver.OnRecei
         restartNetworking()
     }
 
-    override fun onReceiveTCP(line: String, tcpRef: TCPClient) {
+    override fun onReceiveTCPBitmap(image: Bitmap, tcpRef: TCPBitmapClient) {
         // If the current connection does not match the incoming reference, it is out of date and should be ignored.
         // This is important otherwise we will try to transmit on the wrong socket, fail, and then try to restart.
         if (tcpRef != tcp_extplane)
             return
 
-        // TODO: Is this the initial welcome message that gives us the texture information?
-        if (line == "EXTPLANE 1") {
-            Log.d(Const.TAG, "Found ExtPlane welcome message, will now make subscription requests for aircraft info")
-            setConnectionStatus("Received EXTPLANE", "Sending acf subscribe", "Start your flight", "$connectAddress:${Const.TCP_PLUGIN_PORT}")
-        } else {
-            // Log.d(Const.TAG, "Received TCP line [$line]")
-            if (!connectWorking) {
-                // Everything is working with actual data coming back.
-                connectFailures = 0
-                setConnectionStatus("XTextureExtractor working", "", "", "$connectAddress:${Const.TCP_PLUGIN_PORT}")
-                connectWorking = true
-            }
-
-            // TODO: Handle incoming PNG data stream here
+        if (!connectWorking) {
+            // Everything is working with actual data coming back.
+            connectFailures = 0
+            setConnectionStatus("XTextureExtractor", "", "", "$connectAddress:${Const.TCP_PLUGIN_PORT}")
+            connectWorking = true
         }
+
+        // Store the image into the layout, which will resize it to fit the screen
+        // Log.d(Const.TAG, "TCP returned bitmap $image with ${image.width}x${image.height}")
+        textureImage.setImageBitmap(image)
     }
 }

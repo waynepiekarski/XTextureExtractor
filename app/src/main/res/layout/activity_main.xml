@@ -7,8 +7,10 @@
     android:orientation="vertical"
     android:id="@+id/mainLayout"
     android:keepScreenOn="true"
+    android:background="@color/app_background"
     tools:context="net.waynepiekarski.xtextureextractor.MainActivity">
 
+    <!-- Need to use scaleY=-1 because the image arrives flipped from X-Plane's OpenGL texture -->
     <ImageView
         android:id="@+id/textureImage"
         android:layout_width="match_parent"
@@ -16,6 +18,8 @@
         android:layout_alignParentLeft="true"
         android:layout_alignParentStart="true"
         android:scaleType="fitXY"
+        android:scaleX="1"
+        android:scaleY="-1"
         android:src="@drawable/ic_hsi" />
 
     <TextView
@@ -34,7 +38,7 @@
     <!-- About text that can pop up above the rest of the UI -->
     <TextView
         android:id="@+id/aboutText"
-        android:layout_width="@dimen/about_text_width"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
         android:layout_below="@+id/connectText"
@@ -54,7 +58,9 @@
 \nIf multi-cast is not working, you can tap on the connection text to configure a manual X-Plane hostname or IP address.
 \n
 \nXTextureExtractor is licensed under the GNU Public License v3
-\nSource code available from https://github.com/waynepiekarski/XTextureExtractor"
+\nSource code available from https://github.com/waynepiekarski/XTextureExtractor
+\n
+\nTap anywhere to hide this information."
         android:textColor="@color/about_text_color"
         android:textSize="@dimen/about_text_size"
         android:visibility="gone" />

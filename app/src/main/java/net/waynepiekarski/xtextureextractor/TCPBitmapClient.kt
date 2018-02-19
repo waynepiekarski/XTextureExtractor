@@ -22,25 +22,27 @@
 
 package net.waynepiekarski.xtextureextractor
 
+import android.graphics.Bitmap
 import android.util.Log
 
 import java.net.*
 import kotlin.concurrent.thread
 import java.io.*
+import android.graphics.BitmapFactory
 
 
-class TCPClient (private var address: InetAddress, private var port: Int, private var callback: OnTCPEvent) {
+
+
+class TCPBitmapClient (private var address: InetAddress, private var port: Int, private var callback: OnTCPBitmapEvent) {
     private lateinit var socket: Socket
     @Volatile private var cancelled = false
     private lateinit var bufferedWriter: BufferedWriter
-    private lateinit var bufferedReader: BufferedReader
-    private lateinit var inputStreamReader: InputStreamReader
     private lateinit var outputStreamWriter: OutputStreamWriter
 
-    interface OnTCPEvent {
-        fun onReceiveTCP(line: String, tcpRef: TCPClient)
-        fun onConnectTCP(tcpRef: TCPClient)
-        fun onDisconnectTCP(tcpRef: TCPClient)
+    interface OnTCPBitmapEvent {
+        fun onReceiveTCPBitmap(image: Bitmap, tcpRef: TCPBitmapClient)
+        fun onConnectTCP(tcpRef: TCPBitmapClient)
+        fun onDisconnectTCP(tcpRef: TCPBitmapClient)
     }
 
     fun stopListener() {
@@ -79,14 +81,6 @@ class TCPClient (private var address: InetAddress, private var port: Int, privat
                 Log.d(Const.TAG, "Closing bufferedWriter in stopListener caused IOException, this is probably ok")
             }
         }
-        if (::bufferedReader.isInitialized) {
-            try {
-                Log.d(Const.TAG, "Closing bufferedReader")
-                bufferedReader.close()
-            } catch (e: IOException) {
-                Log.d(Const.TAG, "Closing bufferedReader in stopListener caused IOException, this is probably ok")
-            }
-        }
     }
 
     // In a separate function so we can "return" any time to bail out
@@ -101,8 +95,6 @@ class TCPClient (private var address: InetAddress, private var port: Int, privat
 
         // Wrap the socket up so we can work with it - no exceptions should be thrown here
         try {
-            inputStreamReader = InputStreamReader(socket.getInputStream())
-            bufferedReader = BufferedReader(inputStreamReader)
             outputStreamWriter = OutputStreamWriter(socket.getOutputStream())
             bufferedWriter = BufferedWriter(outputStreamWriter)
         } catch (e: IOException) {
@@ -117,19 +109,18 @@ class TCPClient (private var address: InetAddress, private var port: Int, privat
 
         // Start reading from the socket, any writes happen from another thread
         while (!cancelled) {
-            var line: String?
+            var bitmap: Bitmap? = null
             try {
-                line = bufferedReader.readLine()
+                bitmap = BitmapFactory.decodeStream(socket.getInputStream())
             } catch (e: IOException) {
-                Log.d(Const.TAG, "Exception during socket readLine $e")
-                line = null
+                Log.d(Const.TAG, "Exception during socket bitmap decode $e")
+                bitmap = null
             }
-            if (line == null) {
-                Log.d(Const.TAG, "readLine returned null, connection has failed")
+            if (bitmap == null) {
+                Log.d(Const.TAG, "Bitmap decode returned null, connection has failed")
                 cancelled = true
             } else {
-                Log.d(Const.TAG, "TCP returned line [$line]")
-                MainActivity.doUiThread { callback.onReceiveTCP(line, this) }
+                MainActivity.doUiThread { callback.onReceiveTCPBitmap(bitmap, this) }
             }
         }
 
