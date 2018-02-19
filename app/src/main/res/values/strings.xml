@@ -1,0 +1,11 @@
+<resources>
+
+    <string name="app_name">XTextureExtractor</string>
+
+    <color name="about_text_background">#E0000000</color>
+    <color name="about_text_color">#FFFFFF00</color>
+
+    <color name="connect_text_background">#00000000</color>
+    <color name="connect_text_color">#FF000000</color>
+
+</resources>

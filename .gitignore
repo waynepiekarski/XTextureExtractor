@@ -2,3 +2,12 @@
 /*.user
 /build-*
 /output-*
+# Ignore Android Studio generated files
+.idea
+.gradle
+local.properties
+*.iml
+
+# Build files and directories
+*.apk
+build

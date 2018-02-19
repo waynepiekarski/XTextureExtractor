@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// X-Plane 11 Plugins
+// XTextureExtractor
 //
 // Copyright (C) 2018 Wayne Piekarski
 // wayne@tinmith.net http://tinmith.net/wayne
@@ -20,17 +20,7 @@
 //
 // ---------------------------------------------------------------------
 
-These are plugins I have written for X-Plane 11.
-
-XTextureExtractor extracts the textures for the HSI, ND, EICAS, and CDU, and renders them in separate windows that you can place anywhere within X-Plane or on external unused monitors. It currently supports the standard X-Plane 737, the Zibo 737, and the Flight Factor 767.
-
-CDUExtract dumps out the raw dataref strings uses by the Zibo CDU. I used it to see how these dataref strings looked before writing XPlaneCDU for Android.
-
-These are early prototypes, and I look forward to any feedback. File bugs or comments here on GitHub.
-
-// ---------------------------------------------------------------------
-
-XTextureExtractor extracts the textures for the HSI, ND, EICAS, and CDU displays, and renders them in separate windows that you can place anywhere within X-Plane or on external unused monitors.
+XTextureExtractor extracts the textures for the HSI, ND, EICAS, and CDU displays, and renders them in separate windows that you can place anywhere within X-Plane, on external unused monitors, and on Android devices.
 
 Most X-Plane 11 aircraft only allow you to view these displays within the virtual cockpit. These displays can also be quite small and hard to read. However, if you have a home cockpit set up with multiple monitors, it would be ideal to see each of these displays shown full screen and without having to move the view around to see it clearly. Some aircraft support a pop-up CDU, but rarely any of the other displays. There are external apps that can provide some of these displays, but they reimplement everything from scratch and will never be an exact match for your aircraft.
 
@@ -38,7 +28,7 @@ XTextureExtractor analyzes all the OpenGL textures and works out where these dis
 
 X-Plane 11 doesn't natively support this functionality via the SDK, so the plugin uses OpenGL calls to try and guess the correct texture id. The coordinates of all the displays are hard coded for each supported aircraft. It has only been tested with an NVidia GTX 1080 and Windows 10, and the texture finding algorithm may not work on other video cards.
 
-Supported aircraft are the standard X-Plane 737, the Zibo 738, and the Flight Factor 767.
+Supported aircraft are the standard X-Plane 737, Zibo 738, Flight Factor 757, and Flight Factor 767.
 
 The plugin presents a number of buttons to click on:
 
@@ -52,6 +42,6 @@ The plugin presents a number of buttons to click on:
 
 You should extract the ZIP file and copy the Plugin-XTextureExtractor-x64-Release directory into your X-Plane 11\Resources\plugins directory.
 
-XTextureExtractor is open source, licensed under the GNU Public License v3, and available from https://github.com/waynepiekarski/XPlanePlugins
+XTextureExtractor is open source, licensed under the GNU Public License v3, and available from https://github.com/waynepiekarski/XTextureExtractor
 
 This plugin is very experimental and may have bugs. I look forward to your feedback on this plugin, and hope you all find it useful.

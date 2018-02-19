@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:id="@+id/mainLayout"
+    android:keepScreenOn="true"
+    tools:context="net.waynepiekarski.xtextureextractor.MainActivity">
+
+    <ImageView
+        android:id="@+id/textureImage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true"
+        android:scaleType="fitXY"
+        android:src="@drawable/ic_hsi" />
+
+    <TextView
+        android:id="@+id/connectText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="Initializing"
+        android:textColor="@color/connect_text_color"
+        android:textSize="@dimen/connect_text_size"
+        android:background="@color/connect_text_background"
+        android:layout_centerHorizontal="true"
+        android:padding="@dimen/connect_text_padding"
+        android:textAlignment="center" />
+
+    <!-- About text that can pop up above the rest of the UI -->
+    <TextView
+        android:id="@+id/aboutText"
+        android:layout_width="@dimen/about_text_width"
+        android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
+        android:layout_below="@+id/connectText"
+        android:background="@drawable/about"
+        android:padding="@dimen/about_text_padding"
+        android:text="X T e x t u r e E x t r a c t o r  -  Display extracted textures from X-Plane 11
+\n\n__VERSION__
+\nCopyright (C) 2018 - Wayne Piekarski
+\nhttp://www.waynepiekarski.net
+\n\nRequirements:
+\n- X-Plane 11
+\n- Download XTextureExtractor plugin from http://waynepiekarski.net/XTextureExtractor and unzip into the Resources/Plugins directory
+\n- Supported aircraft in X-Plane 11
+\n- Open TCP port 51500 in Windows firewall for XTextureExtractor
+\n- Multicast support on your network for auto-detection
+\n
+\nIf multi-cast is not working, you can tap on the connection text to configure a manual X-Plane hostname or IP address.
+\n
+\nXTextureExtractor is licensed under the GNU Public License v3
+\nSource code available from https://github.com/waynepiekarski/XTextureExtractor"
+        android:textColor="@color/about_text_color"
+        android:textSize="@dimen/about_text_size"
+        android:visibility="gone" />
+
+</RelativeLayout>

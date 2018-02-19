@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Size of the about and info text on small devices, large devices are in sw600dp -->
+    <dimen name="about_text_size">15dp</dimen>
+    <dimen name="about_text_padding">10dp</dimen>
+    <dimen name="about_text_width">100dp</dimen> <!-- Recomputed to fit over text -->
+    <dimen name="connect_text_size">15dp</dimen>
+    <dimen name="connect_text_padding">2dp</dimen>
+
+</resources>
