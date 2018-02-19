@@ -26,6 +26,7 @@
 #include "XPLMUtilities.h"
 #include "XPLMPlanes.h"
 #include "XPLMDataAccess.h"
+#include "XPLMPlugin.h"
 #include <string.h>
 #include <stdio.h>
 #if IBM
@@ -44,19 +45,29 @@
 #endif
 
 char __log_printf_buffer[4096];
-#define log_printf(fmt, ...) snprintf(__log_printf_buffer, 4096, fmt, __VA_ARGS__), XPLMDebugString(__log_printf_buffer)
+#define log_printf(fmt, ...) snprintf(__log_printf_buffer, 4096, "XTextureExtractor: " fmt, __VA_ARGS__), XPLMDebugString(__log_printf_buffer)
 
-#define COCKPIT_MAX_WINDOWS 5
+// Set some arbitrary limit on the number of windows that can be supported
+#define COCKPIT_MAX_WINDOWS 20
 static XPLMWindowID	g_window[COCKPIT_MAX_WINDOWS];
 XPLMDataRef gAcfNotes = NULL;
+GLint cockpit_texture_id = 0;
+GLint cockpit_texture_width = -1;
+GLint cockpit_texture_height = -1;
+GLint cockpit_texture_format = -1;
+GLint cockpit_texture_last = 3000; // This is the starting point for our texture search, it needs to be higher than any texture id and I can't query for it
+GLint cockpit_texture_jump = 1000; // Whenever the aircraft switches, bump up the last texture id, because this plugin seems to cause texture ids to exceed, not sure what the limit is here
+bool  cockpit_dirty = false;
+bool  cockpit_aircraft_known = false;
+char  cockpit_aircraft_name[256];
+char  cockpit_aircraft_filename[256];
+char  plugin_path[MAX_PATH];
+int   cockpit_save_count = 0;
+char  cockpit_save_string[32];
+int   cockpit_window_limit = 0;
 
 
-#define AIRCRAFT_FF767 1
-#define AIRCRAFT_XP737 2
-#define AIRCRAFT_ZB738 3
-#define AIRCRAFT_FF757 4
-#define AIRCRAFT_UNKNOWN -1
-int get_aircraft_type(void) {
+void detect_aircraft_filename(void) {
 	char filename[256];
 	char path[256];
 	char notes[256];
@@ -80,107 +91,38 @@ int get_aircraft_type(void) {
 		}
 	}
 
-	// Note all comparisons are forced to lower case since Windows is case insensitive
-	log_printf("Detecting aircraft, found filename [%s], path [%s], acf_notes [%s]\n", filename, path, notes);
-	if (!strcmp(filename, "767-300er_xp11.acf")) {
-		log_printf("Found Flight Factor 767 match based on filename\n");
-		return AIRCRAFT_FF767;
-	} else if (!strcmp(filename, "757-200_xp11.acf")) {
-		log_printf("Found Flight Factor 757 match based on filename\n");
-		return AIRCRAFT_FF757;
-	} else if (strstr(notes, "zibomod") != NULL) {
-		log_printf("Found ZiboMod 738 based on acf_notes\n");
-		return AIRCRAFT_ZB738;
-	} else if (!strcmp(filename, "b738.acf") && (strstr(path, "\\laminar research\\boeing b737-800\\b738.acf") != NULL)) {
-		log_printf("Matching Laminar original 738 based on full path match\n");
-		return AIRCRAFT_XP737;
-    } else if (!strcmp(filename, "b738.acf")) {
-		log_printf("Assuming XP737 even though path was not an exact match and it is not from Zibo, probably an edited 737\n");
-		return AIRCRAFT_XP737;
-	} else {
-		log_printf("Could not find suitable match for aircraft information\n");
-		return AIRCRAFT_UNKNOWN;
+	if (strstr(notes, "zibomod")) {
+		strcpy(cockpit_aircraft_filename, "zibo-b738.acf");
+		log_printf("Found ZiboMod 738 based on acf_notes, changing file name to [%s]\n", cockpit_aircraft_filename);
+	}
+	else {
+		strcpy(cockpit_aircraft_filename, filename);
+		log_printf("Found aircraft file name [%s]\n", cockpit_aircraft_filename);
 	}
 }
 
-GLint cockpit_texture_id = 0;
-GLint cockpit_texture_width = -1;
-GLint cockpit_texture_height = -1;
-GLint cockpit_texture_format = -1;
-GLint cockpit_texture_last = 3000; // This is the starting point for our texture search, it needs to be higher than any texture id and I can't query for it
-GLint cockpit_texture_jump = 1000; // Whenever the aircraft switches, bump up the last texture id, because this plugin seems to cause texture ids to exceed, not sure what the limit is here
-int   cockpit_aircraft = -1;
-bool  cockpit_dirty = false;
-char  cockpit_aircraft_name[128];
-int   cockpit_save_count = 0;
-char  cockpit_save_string[32];
 
 static void find_last_match_in_texture(GLint start_texture_id)
 {
-	int fw, fh, ff;
-	cockpit_aircraft = get_aircraft_type();
-	switch (cockpit_aircraft) {
-	case AIRCRAFT_FF767:
-		fw = 2048;
-		fh = 2048;
-		ff = 32856;
-		strcpy(cockpit_aircraft_name, "FF767");
-		log_printf("FF767 Detected 2048x2048\n");
-		break;
-	case AIRCRAFT_FF757:
-		fw = 2048;
-		fh = 2048;
-		ff = 32856;
-		strcpy(cockpit_aircraft_name, "FF757");
-		log_printf("FF757 Detected 2048x2048\n");
-		break;
-	case AIRCRAFT_XP737:
-		fw = 2048;
-		fh = 1024;
-		ff = 32856;
-		strcpy(cockpit_aircraft_name, "XP737");
-		log_printf("XP737 Detected 2048x1024\n");
-		break;
-	case AIRCRAFT_ZB738:
-		fw = 2048;
-		fh = 2048;
-		ff = 32856;
-		strcpy(cockpit_aircraft_name, "ZB738");
-		log_printf("ZB738 Detected 2048x2048\n");
-		break;
-	default:
-		fw = 2048;
-		fh = 2048;
-		ff = 0;
-		strcpy(cockpit_aircraft_name, "UNKNOWN");
-		log_printf("Unknown aircraft!\n");
-		break;
-	}
-
 	if (start_texture_id <= 0)
 		start_texture_id = cockpit_texture_last;
-	log_printf("Finding last texture from %d (max=%d) that matches fw=%d, fh=%d, ff=%d for aircraft %s\n", start_texture_id, cockpit_texture_last, fw, fh, ff, cockpit_aircraft_name);
+	log_printf("Finding last texture from %d (max=%d) that matches fw=%d, fh=%d, ff=%d for aircraft %s\n", start_texture_id, cockpit_texture_last, cockpit_texture_width, cockpit_texture_height, cockpit_texture_format, cockpit_aircraft_filename);
 	int tw, th, tf;
 	for (int i = start_texture_id; i >= 0; i--) {
 		XPLMBindTexture2d(i, 0);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &tw);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &th);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &tf);
-		if ((tw == fw) && (th == fh) && (tf == ff)) {
+		if ((tw == cockpit_texture_width) && (th == cockpit_texture_height) && (tf == cockpit_texture_format)) {
 			log_printf("Found texture id=%d, width=%d, height=%d, internal format == %d\n", i, tw, th, tf);
 			cockpit_texture_id = i;
-			cockpit_texture_width = tw;
-			cockpit_texture_height = th;
-			cockpit_texture_format = tf;
 			return;
 		}
 	}
 	cockpit_texture_id = 0;
-	cockpit_texture_width = 0;
-	cockpit_texture_height = 0;
-	cockpit_texture_format = 0;
 	log_printf("Did not find matching texture, using id 0 instead\n");
 }
+
 
 void load_window_state();
 void				draw(XPLMWindowID in_window_id, void * in_refcon);
@@ -191,15 +133,18 @@ XPLMCursorStatus	dummy_cursor_status_handler(XPLMWindowID in_window_id, int x, i
 int					dummy_wheel_handler(XPLMWindowID in_window_id, int x, int y, int wheel, int clicks, void * in_refcon) { return 0; }
 void				dummy_key_handler(XPLMWindowID in_window_id, char key, XPLMKeyFlags flags, char virtual_key, void * in_refcon, int losing_focus) { }
 
-static float _g_pop_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
-static float _g_texture_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
-static float _g_scan_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
-static float _g_load_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
-static float _g_save_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
-static float _g_clear_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
-static float _g_dump_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
+static int _g_pop_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
+static int _g_texture_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
+static int _g_scan_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
+static int _g_load_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
+static int _g_save_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
+static int _g_clear_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
+static int _g_dump_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 
-static int	coord_in_rect(float x, float y, float * bounds_lbrt)  { return ((x >= bounds_lbrt[0]) && (x < bounds_lbrt[2]) && (y < bounds_lbrt[3]) && (y >= bounds_lbrt[1])); }
+static char  _g_window_name[COCKPIT_MAX_WINDOWS][256];  // titles of each window
+static int _g_texture_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
+
+static int	coord_in_rect(int x, int y, int * bounds_lbrt)  { return ((x >= bounds_lbrt[0]) && (x < bounds_lbrt[2]) && (y < bounds_lbrt[3]) && (y >= bounds_lbrt[1])); }
 
 
 PLUGIN_API int XPluginStart(
@@ -207,82 +152,69 @@ PLUGIN_API int XPluginStart(
 						char *		outSig,
 						char *		outDesc)
 {
+	XPLMGetPluginInfo(XPLMGetMyID(), NULL, plugin_path, NULL, NULL);
+	char *slash = strrchr(plugin_path, '\\'); // Chop off the filename so we can get the path
+	if (slash != NULL) {
+		*slash = '\0';
+	} else {
+		log_printf("The XPLMGetPluginInfo returned did not contain \\64\\win.xpl as expected [%s]\n", plugin_path);
+	}
+	strcat(plugin_path, "\\..\\");
+
 	strcpy(outName, "XTextureExtractorPlugin");
 	strcpy(outSig, "net.waynepiekarski.windowcockpitplugin");
 	sprintf(outDesc, "Extracts out cockpit textures into a separate window - compiled %s %s", __DATE__, __TIME__);
-	log_printf("XPluginStart: XTextureExtractor plugin - %s\n", outDesc);
+	log_printf("XPluginStart: XTextureExtractor plugin - %s - path %s\n", outDesc, plugin_path);
 
 	// Register to listen for aircraft notes information, so we can detect Zibo 738 later
 	gAcfNotes = XPLMFindDataRef("sim/aircraft/view/acf_notes");
 
+	// Global save button that increments each time
 	strcpy(cockpit_save_string, "Sv");
 
-	// We're not guaranteed that the main monitor's lower left is at (0, 0)... we'll need to query for the global desktop bounds!
-	int global_desktop_bounds[4]; // left, bottom, right, top
-	XPLMGetScreenBoundsGlobal(&global_desktop_bounds[0], &global_desktop_bounds[3], &global_desktop_bounds[2], &global_desktop_bounds[1]);
-
-	XPLMCreateWindow_t params;
-	params.structSize = sizeof(params);
-	params.left = global_desktop_bounds[0] + 50;
-	params.bottom = global_desktop_bounds[1] + 150;
-	params.right = global_desktop_bounds[0] + 350;
-	params.top = global_desktop_bounds[1] + 450;
-	params.visible = 1;
-	params.drawWindowFunc = draw;
-	params.handleMouseClickFunc = handle_mouse;
-	params.handleRightClickFunc = dummy_mouse_handler;
-	params.handleMouseWheelFunc = dummy_wheel_handler;
-	params.handleKeyFunc = dummy_key_handler;
-	params.handleCursorFunc = dummy_cursor_status_handler;
-	params.refcon = NULL;
-	params.layer = xplm_WindowLayerFloatingWindows;
-	params.decorateAsFloatingWindow = 1;
-
-	// Open windows in reverse order so the most important are at the top
-	for (intptr_t i = COCKPIT_MAX_WINDOWS-1; i >= 0; i--) {
-		params.refcon = (void *)i; // Store the window id
-		params.left += 20; // Stagger the windows
-		params.bottom -= 20;
-		params.right += 20;
-		params.top -= 20;
-		g_window[i] = XPLMCreateWindowEx(&params);
-		XPLMSetWindowPositioningMode(g_window[i], xplm_WindowPositionFree, -1);
-		XPLMSetWindowGravity(g_window[i], 0, 1, 0, 1); // As the X-Plane window resizes, keep our size constant, and our left and top edges in the same place relative to the window's left/top
-		// XPLMSetWindowResizingLimits(g_window[i], 200, 200, 1000, 1000); // Limit resizing our window: maintain a minimum width/height of 200 boxels and a max width/height of 500
-		switch (i) {
-		case 0: XPLMSetWindowTitle(g_window[i], "NAV: Window Cockpit"); break;
-		case 1: XPLMSetWindowTitle(g_window[i], "HSI: Window Cockpit"); break;
-		case 2: XPLMSetWindowTitle(g_window[i], "EICAS1: Window Cockpit"); break;
-		case 3: XPLMSetWindowTitle(g_window[i], "EICAS2: Window Cockpit"); break;
-		case 4: XPLMSetWindowTitle(g_window[i], "MISC: Window Cockpit"); break;
-		default: break;
-		}
-	}
-
-	return (g_window[0] != NULL);
+	return 1;
 }
 
 PLUGIN_API void	XPluginStop(void)
 {
 	log_printf("XPluginStop: XTextureExtractor plugin\n");
 
-	// Since we created the window, we'll be good citizens and clean it up
+	// Destroy the windows if they exist
 	for (int i = 0; i < COCKPIT_MAX_WINDOWS; i++) {
-		XPLMDestroyWindow(g_window[i]);
-		g_window[i] = NULL;
+		if (g_window[i] != NULL) {
+			XPLMDestroyWindow(g_window[i]);
+			g_window[i] = NULL;
+		}
 	}
 }
 
-PLUGIN_API void XPluginDisable(void) { }
-PLUGIN_API int  XPluginEnable(void)  { return 1; }
-PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFrom, int inMsg, void * inParam)
-{
-	log_printf("XPluginReceiveMessage XTextureExtractor: inFrom=%d, inMsg=%d, inParam=%p\n", inFrom, inMsg, inParam);
-	if (inMsg == 103) {
-		// Seems like 103 is sent just when the aircraft is finished loading, we can try grabbing the texture here
-		log_printf("Found event inMsg=103, lets try to find the texture right now, increasing last texture id by %d to %d\n", cockpit_texture_jump, cockpit_texture_last + cockpit_texture_jump);
+bool plugin_disabled = false;
+PLUGIN_API void XPluginDisable(void) {
+	log_printf("XPluginDisable\n");
+	plugin_disabled = true;
+	XPluginStop();
+}
+
+PLUGIN_API int XPluginEnable(void) {
+	if (plugin_disabled) {
+		log_printf("Plugin was previously disabled, re-enabling it\n");
+		plugin_disabled = false;
 		cockpit_dirty = true;
 		cockpit_texture_last += cockpit_texture_jump;
+		load_window_state();
+	}
+	return 1;
+}
+
+PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFrom, int inMsg, void * inParam)
+{
+	// log_printf("XPluginReceiveMessage XTextureExtractor: inFrom=%d, inMsg=%d, inParam=%p\n", inFrom, inMsg, inParam);
+	if (inMsg == 103) {
+		// Seems like 103 is sent just when the aircraft is finished loading, we can try grabbing the texture here
+		log_printf("XPluginReceiveMessage: Found event inMsg=103, lets try to load window properties and increasing last texture id by %d to %d\n", cockpit_texture_jump, cockpit_texture_last + cockpit_texture_jump);
+		cockpit_dirty = true;
+		cockpit_texture_last += cockpit_texture_jump;
+		load_window_state();
 	}
 }
 
@@ -308,10 +240,10 @@ void save_tga(GLint texId)
 	unsigned char tga_header[12] = { 0,0,2,0,0,0,0,0,0,0,0,0 };
 
 	unsigned char image_header[6] = {
-		((int)(tw % 256)),
-		((int)(tw / 256)),
-		((int)(th % 256)),
-		((int)(th / 256)), 24, 0 };
+		(unsigned char)((int)(tw % 256)),
+		(unsigned char)((int)(tw / 256)),
+		(unsigned char)((int)(th % 256)),
+		(unsigned char)((int)(th / 256)), 24, 0 };
 	
 	fwrite(tga_header, sizeof(unsigned char), 12, fp);
 	fwrite(image_header, sizeof(unsigned char), 6, fp);
@@ -323,35 +255,8 @@ void save_tga(GLint texId)
 
 void dump_debug()
 {
-	log_printf("Dump request\n");
-
 	int tw, th, tf;
-	int fw, fh;
-
-	switch (get_aircraft_type()) {
-	case AIRCRAFT_FF767:
-		fw = 2048;
-		fh = 2048;
-		log_printf("FF767 Detected 2048x2048\n");
-		break;
-	case AIRCRAFT_FF757:
-		fw = 2048;
-		fh = 2048;
-		log_printf("FF757 Detected 2048x2048\n");
-		break;
-	case AIRCRAFT_XP737:
-		fw = 2048;
-		fh = 1024;
-		log_printf("XP737 Detected 2048x1024\n");
-	case AIRCRAFT_ZB738:
-		fw = 2048;
-		fh = 2048;
-		log_printf("ZB738 Detected 2048x2048\n");
-	default:
-		fw = 2048;
-		fh = 2048;
-		log_printf("Unknown Detected\n");
-	}
+	log_printf("Dump request, searching for %dx%d textures for %s\n", cockpit_texture_width, cockpit_texture_height, cockpit_aircraft_filename);
 
 	for (int i = 0; i < cockpit_texture_last; i++) {
 		XPLMBindTexture2d(i, 0);
@@ -362,7 +267,7 @@ void dump_debug()
 		// XP737 panel is "fbo-list panel texture 1-fbo" at 2048x1024
 		// FF7*7 panel is "fbo-list panel texture 1-fbo" at 2048x2048
 		// ZB738 panel is "fbo-list panel texture 1-fbo" at 2048x2048
-		if ((tw == fw) && (th == fh)) {
+		if ((tw == cockpit_texture_width) && (th == cockpit_texture_height)) {
 			log_printf("texture id=%d, width=%d, height=%d iformat=%d\n", i, tw, th, tf);
 		}
 	}
@@ -373,16 +278,15 @@ void dump_debug()
 }
 
 
-void draw_texture_rect(float leftX, float topY, float rightX, float botY, float maxX, float maxY, int l, int t, int r, int b) {
+void draw_texture_rect(int leftX, int topY, int rightX, int botY, int maxX, int maxY, int l, int t, int r, int b) {
 	XPLMBindTexture2d(cockpit_texture_id, 0);
 	glBegin(GL_QUADS);
-	glTexCoord2f( leftX / maxX, (maxY - topY) / maxY);  glVertex2i(l, t); // Top left
-	glTexCoord2f(rightX / maxX, (maxY - topY) / maxY);  glVertex2i(r, t); // Top right
-	glTexCoord2f(rightX / maxX, (maxY - botY) / maxY);  glVertex2i(r, b); // Bottom right
-	glTexCoord2f( leftX / maxX, (maxY - botY) / maxY);  glVertex2i(l, b); // Bottom left
+	glTexCoord2f( leftX / (float)maxX, (maxY - topY) / (float)maxY);  glVertex2i(l, t); // Top left
+	glTexCoord2f(rightX / (float)maxX, (maxY - topY) / (float)maxY);  glVertex2i(r, t); // Top right
+	glTexCoord2f(rightX / (float)maxX, (maxY - botY) / (float)maxY);  glVertex2i(r, b); // Bottom right
+	glTexCoord2f( leftX / (float)maxX, (maxY - botY) / (float)maxY);  glVertex2i(l, b); // Bottom left
 	glEnd();
 }
-
 
 void	draw(XPLMWindowID in_window_id, void * in_refcon)
 {
@@ -410,27 +314,27 @@ void	draw(XPLMWindowID in_window_id, void * in_refcon)
 	XPLMGetWindowGeometry(in_window_id, &l, &t, &r, &b);
 
 	intptr_t win_num = (intptr_t)in_refcon;
-	float *g_pop_button_lbrt = &_g_pop_button_lbrt[win_num][0];
-	float *g_texture_button_lbrt = &_g_texture_button_lbrt[win_num][0];
-	float *g_scan_button_lbrt = &_g_scan_button_lbrt[win_num][0];
-	float *g_save_button_lbrt = &_g_save_button_lbrt[win_num][0];
-	float *g_load_button_lbrt = &_g_load_button_lbrt[win_num][0];
-	float *g_clear_button_lbrt = &_g_clear_button_lbrt[win_num][0];
-	float *g_dump_button_lbrt = &_g_dump_button_lbrt[win_num][0];
+	int *g_pop_button_lbrt = &_g_pop_button_lbrt[win_num][0];
+	int *g_texture_button_lbrt = &_g_texture_button_lbrt[win_num][0];
+	int *g_scan_button_lbrt = &_g_scan_button_lbrt[win_num][0];
+	int *g_save_button_lbrt = &_g_save_button_lbrt[win_num][0];
+	int *g_load_button_lbrt = &_g_load_button_lbrt[win_num][0];
+	int *g_clear_button_lbrt = &_g_clear_button_lbrt[win_num][0];
+	int *g_dump_button_lbrt = &_g_dump_button_lbrt[win_num][0];
 
 	// Draw our buttons
 	{
 		// Position the pop-in/pop-out button in the upper left of the window
 		g_pop_button_lbrt[0] = l + 0;
 		g_pop_button_lbrt[3] = t - 0;
-		g_pop_button_lbrt[2] = g_pop_button_lbrt[0] + XPLMMeasureString(xplmFont_Proportional, pop_label, strlen(pop_label)); // *just* wide enough to fit the button text
-		g_pop_button_lbrt[1] = g_pop_button_lbrt[3] - (1.25f * char_height); // a bit taller than the button text
+		g_pop_button_lbrt[2] = g_pop_button_lbrt[0] + (int)XPLMMeasureString(xplmFont_Proportional, pop_label, (int)strlen(pop_label)); // *just* wide enough to fit the button text
+		g_pop_button_lbrt[1] = g_pop_button_lbrt[3] - (int)(1.25f * char_height); // a bit taller than the button text
 		
 		// Position the "move to lower left" button just to the right of the pop-in/pop-out button
 		char texture_info_text[128];
 		sprintf(texture_info_text, "GL%d [%s]", cockpit_texture_id, cockpit_aircraft_name);
 
-#define DEFINE_BOX(_array, _left, _string) _array[0] = _left[2] + 10, _array[1] = _left[1], _array[2] = _array[0] + XPLMMeasureString(xplmFont_Proportional, _string, strlen(_string)), _array[3] = _left[3]
+#define DEFINE_BOX(_array, _left, _string) _array[0] = _left[2] + 10, _array[1] = _left[1], _array[2] = _array[0] + (int)XPLMMeasureString(xplmFont_Proportional, _string, (int)strlen(_string)), _array[3] = _left[3]
 		DEFINE_BOX(g_texture_button_lbrt, g_pop_button_lbrt, texture_info_text);
 		DEFINE_BOX(g_scan_button_lbrt, g_texture_button_lbrt, "<<");
 		DEFINE_BOX(g_load_button_lbrt, g_scan_button_lbrt, "Ld");
@@ -477,38 +381,18 @@ void	draw(XPLMWindowID in_window_id, void * in_refcon)
 	);
 
 	if (cockpit_dirty) {
-		log_printf("Detected aircraft dirty flag set, so finding texture and loading window layouts\n");
+		log_printf("Detected aircraft dirty flag set, so finding texture\n");
 		find_last_match_in_texture(-1);
-		load_window_state();
 		cockpit_dirty = false;
 	}
 
 	const int topInset = 20;
-	switch (cockpit_aircraft) {
-	case AIRCRAFT_FF767:
-	case AIRCRAFT_FF757:
-		if      (in_window_id == g_window[0]) draw_texture_rect(  18,  372,  412,  841,   2048, 2048, l, t - topInset, r, b); // ND
-		else if (in_window_id == g_window[1]) draw_texture_rect(  18,   11,  418,  319,   2048, 2048, l, t - topInset, r, b); // HSI
-		else if (in_window_id == g_window[2]) draw_texture_rect( 442,    7,  926,  412,   2048, 2048, l, t - topInset, r, b); // EICAS
-		else if (in_window_id == g_window[3]) draw_texture_rect( 943,    9, 1427,  414,   2048, 2048, l, t - topInset, r, b); // EICAS-2
-		else if (in_window_id == g_window[4]) draw_texture_rect( 434,  420, 1576,  854,   2048, 2048, l, t - topInset, r, b); // MISC
-		break;
-	case AIRCRAFT_ZB738:
-		if      (in_window_id == g_window[0]) draw_texture_rect( 524, 1550, 1018, 2038,   2048, 2048, l, t - topInset, r, b); // ND
-		else if (in_window_id == g_window[1]) draw_texture_rect(   9, 1538,  516, 2043,   2048, 2048, l, t - topInset, r, b); // HSI
-		else if (in_window_id == g_window[2]) draw_texture_rect(1040, 1550, 1527, 2028,   2048, 2048, l, t - topInset, r, b); // EICAS
-		else if (in_window_id == g_window[3]) draw_texture_rect(1533, 1551, 2038, 2037,   2048, 2048, l, t - topInset, r, b); // EICAS-2
-		else if (in_window_id == g_window[4]) draw_texture_rect(  10,  544,  540, 1023,   2048, 2048, l, t - topInset, r, b); // CDU
-		break;
-	case AIRCRAFT_XP737:
-		if      (in_window_id == g_window[0]) draw_texture_rect( 516,  521, 1026,  968,   2048, 1024, l, t - topInset, r, b); // ND
-		else if (in_window_id == g_window[1]) draw_texture_rect(  18,  514,  514, 1019,   2048, 1024, l, t - topInset, r, b); // HSI
-		else if (in_window_id == g_window[2]) draw_texture_rect(1042,  524, 1549, 1012,   2048, 1024, l, t - topInset, r, b); // EICAS
-		else if (in_window_id == g_window[3]) draw_texture_rect(1558,  521, 2041, 1013,   2048, 1024, l, t - topInset, r, b); // EICAS-2
-		else if (in_window_id == g_window[4]) draw_texture_rect(1557,    0, 2046,  530,   2048, 1024, l, t - topInset, r, b); // MISC
-		break;
-	default:
-		// Draw an X on each window for unknown aircraft
+	int *g_texture_lbrt = &_g_texture_lbrt[win_num][0];
+
+	if (cockpit_aircraft_known) {
+		draw_texture_rect(g_texture_lbrt[0], g_texture_lbrt[1], g_texture_lbrt[2], g_texture_lbrt[3], cockpit_texture_width, cockpit_texture_height, l, t - topInset, r, b);
+	} else {
+		// Draw an X on the window for unknown aircraft
 		// Note that it shows up as black since the texture units are active, but I don't want to change this
 		float red[] = { 1.0, 0.0, 0.0, 1.0 };
 		glColor4fv(red);
@@ -518,7 +402,6 @@ void	draw(XPLMWindowID in_window_id, void * in_refcon)
 		glVertex2i(r, t - topInset); // Top right
 		glVertex2i(l, b);            // Bottom left
 		glEnd();
-		break;
 	}
 }
 
@@ -526,7 +409,7 @@ void clear_window_state() {
 	char filename[256];
 	sprintf(filename, "windowcockpit-%s.txt", cockpit_aircraft_name);
 	log_printf("Removing window save file %s\n", filename);
-	unlink(filename);
+	_unlink(filename);
 }
 
 void save_window_state() {
@@ -538,7 +421,7 @@ void save_window_state() {
 		log_printf("Could not save to file %s\n", filename);
 		return;
 	}
-	for (intptr_t i = 0; i < COCKPIT_MAX_WINDOWS; i++) {
+	for (intptr_t i = 0; i < cockpit_window_limit; i++) {
 		const int is_popped_out = XPLMWindowIsPoppedOut(g_window[i]);
 		int l, t, r, b;
 		if (is_popped_out)
@@ -557,9 +440,93 @@ void save_window_state() {
 }
 
 void load_window_state() {
+
+	// Destroy the windows if they exist
+	for (int i = 0; i < COCKPIT_MAX_WINDOWS; i++) {
+		if (g_window[i] != NULL) {
+			XPLMDestroyWindow(g_window[i]);
+			g_window[i] = NULL;
+		}
+	}
+
+	// Detect the type of aircraft and load in the name to cockpit_aircraft_filename
+	detect_aircraft_filename();
+
+	// Read in the new aircraft configuration file
+	char texturefile[256];
+	sprintf(texturefile, "%s\\%s.tex", plugin_path, cockpit_aircraft_filename);
+	FILE *fp = fopen(texturefile, "rb");
+	if (fp == NULL) {
+		log_printf("Could not load texture data from file %s\n", texturefile);
+		return;
+	} else {
+		log_printf("Loading XTextureExtractor state from %s\n", texturefile);
+	}
+	cockpit_window_limit = 0;
+	cockpit_aircraft_known = false;
+	if (fscanf(fp, "%s %d %d %d", cockpit_aircraft_name, &cockpit_texture_width, &cockpit_texture_height, &cockpit_texture_format) != 4) {
+		log_printf("Failed to read texture description from file, aborting reading\n");
+		fclose(fp);
+		return;
+	} else {
+		log_printf("Read in [%s] = max(%d,%d) format(%d)\n", cockpit_aircraft_name, cockpit_texture_width, cockpit_texture_height, cockpit_texture_format);
+	}
+	cockpit_aircraft_known = true;
+
+	for (int i = 0; i < COCKPIT_MAX_WINDOWS; i++) {
+		if (fscanf(fp, "%s %d %d %d %d", _g_window_name[i], &_g_texture_lbrt[i][0], &_g_texture_lbrt[i][1], &_g_texture_lbrt[i][2], &_g_texture_lbrt[i][3]) != 5) {
+			log_printf("Reached EOF, finished reading with %d successful textures\n", cockpit_window_limit);
+			break;
+		}
+		else {
+			log_printf("Read in %d = [%s] LBRT=%d, %d, %d, %d\n", i, _g_window_name[i], _g_texture_lbrt[i][0], _g_texture_lbrt[i][1], _g_texture_lbrt[i][2], _g_texture_lbrt[i][3]);
+			cockpit_window_limit = i + 1;
+		}
+	}
+	fclose(fp);
+
+	// We're not guaranteed that the main monitor's lower left is at (0, 0)... we'll need to query for the global desktop bounds!
+	int global_desktop_bounds[4]; // left, bottom, right, top
+	XPLMGetScreenBoundsGlobal(&global_desktop_bounds[0], &global_desktop_bounds[3], &global_desktop_bounds[2], &global_desktop_bounds[1]);
+
+	XPLMCreateWindow_t params;
+	params.structSize = sizeof(params);
+	params.left = global_desktop_bounds[0] + 50;
+	params.bottom = global_desktop_bounds[1] + 150;
+	params.right = global_desktop_bounds[0] + 350;
+	params.top = global_desktop_bounds[1] + 450;
+	params.visible = 1;
+	params.drawWindowFunc = draw;
+	params.handleMouseClickFunc = handle_mouse;
+	params.handleRightClickFunc = dummy_mouse_handler;
+	params.handleMouseWheelFunc = dummy_wheel_handler;
+	params.handleKeyFunc = dummy_key_handler;
+	params.handleCursorFunc = dummy_cursor_status_handler;
+	params.refcon = NULL;
+	params.layer = xplm_WindowLayerFloatingWindows;
+	params.decorateAsFloatingWindow = 1;
+
+	// Open windows in reverse order so the most important are at the top
+	for (intptr_t i = cockpit_window_limit - 1; i >= 0; i--) {
+		params.refcon = (void *)i; // Store the window id
+		params.left += 20; // Stagger the windows
+		params.bottom -= 20;
+		params.right += 20;
+		params.top -= 20;
+		g_window[i] = XPLMCreateWindowEx(&params);
+		XPLMSetWindowPositioningMode(g_window[i], xplm_WindowPositionFree, -1);
+		XPLMSetWindowGravity(g_window[i], 0, 1, 0, 1); // As the X-Plane window resizes, keep our size constant, and our left and top edges in the same place relative to the window's left/top
+													   // XPLMSetWindowResizingLimits(g_window[i], 200, 200, 1000, 1000); // Limit resizing our window: maintain a minimum width/height of 200 boxels and a max width/height of 500
+		char winname[1024];
+		sprintf(winname, "XTextureExtractor: %s", _g_window_name[i]);
+		XPLMSetWindowTitle(g_window[i], winname);
+	}
+
+
+	// Configure the window based on a local configuration file (if present)
 	char filename[256];
 	sprintf(filename, "windowcockpit-%s.txt", cockpit_aircraft_name);
-	FILE *fp = fopen(filename, "rb");
+	fp = fopen(filename, "rb");
 	if (fp == NULL) {
 		log_printf("Could not load from file %s\n", filename);
 		return;
@@ -569,7 +536,7 @@ void load_window_state() {
 	for (intptr_t i = 0; i < COCKPIT_MAX_WINDOWS; i++) {
 		int is_popped_out, l, t, r, b;
 		if (fscanf(fp, "%d %d %d %d %d", &is_popped_out, &l, &t, &r, &b) != 5) {
-			log_printf("Failed to read from file\n");
+			log_printf("Reached EOF from file %s\n", filename);
 			break;
 		}
 		log_printf("Read from file Pop=%d L=%d T=%d R=%d B=%d\n", is_popped_out, l, t, r, b);
@@ -588,46 +555,37 @@ int	handle_mouse(XPLMWindowID in_window_id, int x, int y, XPLMMouseStatus is_dow
 	if(is_down == xplm_MouseDown)
 	{
 		intptr_t win_num = (intptr_t)in_refcon;
-		float *g_pop_button_lbrt     = &_g_pop_button_lbrt[win_num][0];
-		float *g_texture_button_lbrt = &_g_texture_button_lbrt[win_num][0];
-		float *g_scan_button_lbrt    = &_g_scan_button_lbrt[win_num][0];
-		float *g_load_button_lbrt    = &_g_load_button_lbrt[win_num][0];
-		float *g_save_button_lbrt    = &_g_save_button_lbrt[win_num][0];
-		float *g_clear_button_lbrt   = &_g_clear_button_lbrt[win_num][0];
-		float *g_dump_button_lbrt    = &_g_dump_button_lbrt[win_num][0];
-
 		const int is_popped_out = XPLMWindowIsPoppedOut(in_window_id);
 		if (!XPLMIsWindowInFront(in_window_id))
 		{
 			XPLMBringWindowToFront(in_window_id);
 		}
-		else if(coord_in_rect(x, y, g_pop_button_lbrt)) // user clicked the pop-in/pop-out button
+		else if(coord_in_rect(x, y, _g_pop_button_lbrt[win_num])) // user clicked the pop-in/pop-out button
 		{
 			XPLMSetWindowPositioningMode(in_window_id, is_popped_out ? xplm_WindowPositionFree : xplm_WindowPopOut, 0);
 		}
-		else if(coord_in_rect(x, y, g_texture_button_lbrt)) // user clicked the "texture info button" button
+		else if(coord_in_rect(x, y, _g_texture_button_lbrt[win_num])) // user clicked the "texture info button" button
 		{
 			// Rescan from the top for the best texture, this usually works
 			find_last_match_in_texture(-1);
 		}
-		else if (coord_in_rect(x, y, g_scan_button_lbrt)) {
+		else if (coord_in_rect(x, y, _g_scan_button_lbrt[win_num])) {
 			// Resume from the current texture, this is when the default algorithm fails but is very rare
 			find_last_match_in_texture(cockpit_texture_id - 1);
 		}
-		else if (coord_in_rect(x, y, g_load_button_lbrt)) {
+		else if (coord_in_rect(x, y, _g_load_button_lbrt[win_num])) {
 			load_window_state();
 		}
-		else if (coord_in_rect(x, y, g_save_button_lbrt)) {
+		else if (coord_in_rect(x, y, _g_save_button_lbrt[win_num])) {
 			save_window_state();
 		}
-		else if (coord_in_rect(x, y, g_clear_button_lbrt)) {
+		else if (coord_in_rect(x, y, _g_clear_button_lbrt[win_num])) {
 			clear_window_state();
 		}
-		else if (coord_in_rect(x, y, g_dump_button_lbrt)) {
+		else if (coord_in_rect(x, y, _g_dump_button_lbrt[win_num])) {
 			dump_debug();
 		}
-		else
-		{
+		else {
 			// log_printf("Ignored unknown click\n");
 		}
 	}

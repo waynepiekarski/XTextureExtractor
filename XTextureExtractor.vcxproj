@@ -57,6 +57,8 @@
     <TargetName>win</TargetName>
     <IntDir>build-$(ProjectName)-$(Platform)-$(Configuration)\</IntDir>
     <OutDir>output-$(ProjectName)-$(Platform)-$(Configuration)\64\</OutDir>
+    <CustomBuildAfterTargets>
+    </CustomBuildAfterTargets>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -95,6 +97,13 @@
       <AdditionalDependencies>Opengl32.lib;odbc32.lib;odbccp32.lib;XPLM_64.lib;XPWidgets_64.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>Plugin-$(ProjectName)-$(Platform)-$(Configuration)\64\$(TargetName)$(TargetExt)</OutputFile>
     </Link>
+    <CustomBuildStep>
+      <Command>
+      </Command>
+    </CustomBuildStep>
+    <PostBuildEvent>
+      <Command>xcopy /y XTextureExtractor-Data\*.* Plugin-$(ProjectName)-$(Platform)-$(Configuration)\</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -134,6 +143,12 @@
       <AdditionalDependencies>Opengl32.lib;odbc32.lib;odbccp32.lib;XPLM_64.lib;XPWidgets_64.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>Plugin-$(ProjectName)-$(Platform)-$(Configuration)\64\$(TargetName)$(TargetExt)</OutputFile>
     </Link>
+    <CustomBuildStep>
+      <Command>copy XTextureExtractor-Data\*.* Plugin-$(ProjectName)-$(Platform)-$(Configuration)\</Command>
+    </CustomBuildStep>
+    <PostBuildEvent>
+      <Command>xcopy /y XTextureExtractor-Data\*.* Plugin-$(ProjectName)-$(Platform)-$(Configuration)\</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="XTextureExtractor.cpp" />
