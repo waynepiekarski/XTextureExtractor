@@ -43,6 +43,9 @@
 #ifndef XPLM300
 	#error This is made to be compiled against the XPLM300 SDK
 #endif
+#include <vector>
+using namespace std;
+#include "lodepng/lodepng.h"
 
 char __log_printf_buffer[4096];
 #define log_printf(fmt, ...) snprintf(__log_printf_buffer, 4096, "XTextureExtractor: " fmt, __VA_ARGS__), XPLMDebugString(__log_printf_buffer)
@@ -219,38 +222,39 @@ PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFrom, int inMsg, void * inP
 }
 
 
-void save_tga(GLint texId)
+void save_png(GLint texId)
 {
 	int tw, th, tf;
 	XPLMBindTexture2d(texId, 0);
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &tw);
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &th);
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &tf);
+	
+	// Read the entire texture into a buffer
+	unsigned char * pixels = new unsigned char[tw * th * 4];
+	glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
-	unsigned char * pixels = new unsigned char[tw * th * 3];
+	// Write out the RGBA image as an RGB image with lodepng
+	std::vector<unsigned char> png;
+	lodepng::State state;
+	state.info_raw.colortype = LCT_RGBA; // Input type
+	state.info_raw.bitdepth = 8;
+	state.info_png.color.colortype = LCT_RGB; // Output type
+	state.info_png.color.bitdepth = 8;
+	state.encoder.auto_convert = 0; // Must provide this or will ignore the input/output types
+	unsigned error = lodepng::encode(png, pixels, tw, th, state);
 
-	glGetTexImage(GL_TEXTURE_2D, 0, GL_BGR_EXT, GL_UNSIGNED_BYTE, pixels);
-
-	FILE *fp = fopen("texture_save.tga", "wb");
+	FILE *fp = fopen("texture_save.png", "wb");
 	if (fp == NULL) {
 		log_printf("Could not save to file\n");
+		delete[] pixels;
 		return;
 	}
-
-	unsigned char tga_header[12] = { 0,0,2,0,0,0,0,0,0,0,0,0 };
-
-	unsigned char image_header[6] = {
-		(unsigned char)((int)(tw % 256)),
-		(unsigned char)((int)(tw / 256)),
-		(unsigned char)((int)(th % 256)),
-		(unsigned char)((int)(th / 256)), 24, 0 };
-	
-	fwrite(tga_header, sizeof(unsigned char), 12, fp);
-	fwrite(image_header, sizeof(unsigned char), 6, fp);
-	fwrite(pixels, sizeof(unsigned char), tw * th * 3, fp);
-
+	fwrite(png.data(), sizeof(unsigned char), png.size(), fp);
 	fclose(fp);
+
 	delete[] pixels;
+	log_printf("PNG save is complete to file texture_save.png in X-Plane main directory\n");
 }
 
 void dump_debug()
@@ -273,8 +277,7 @@ void dump_debug()
 	}
 
 	log_printf("Saving texture for id %d\n", cockpit_texture_id);
-	save_tga(cockpit_texture_id);
-	log_printf("TGA save is complete\n");
+	save_png(cockpit_texture_id);
 }
 
 
