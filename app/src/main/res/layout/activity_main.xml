@@ -10,6 +10,20 @@
     android:background="@color/app_background"
     tools:context="net.waynepiekarski.xtextureextractor.MainActivity">
 
+    <TextView
+        android:id="@+id/imageFailureText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="@string/help_text"
+        android:textColor="@color/connect_text_color"
+        android:textSize="@dimen/connect_text_size"
+        android:background="@color/connect_text_background"
+        android:layout_centerHorizontal="true"
+        android:layout_centerVertical="true"
+        android:padding="@dimen/connect_text_padding"
+        android:textAlignment="center" />
+
     <!-- Need to use scaleY=-1 because the image arrives flipped from X-Plane's OpenGL texture -->
     <ImageView
         android:id="@+id/textureImage"

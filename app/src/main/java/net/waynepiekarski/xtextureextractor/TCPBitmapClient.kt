@@ -29,8 +29,7 @@ import java.net.*
 import kotlin.concurrent.thread
 import java.io.*
 import android.graphics.BitmapFactory
-
-
+import android.widget.Toast
 
 
 class TCPBitmapClient (private var address: InetAddress, private var port: Int, private var callback: OnTCPBitmapEvent) {
@@ -38,11 +37,13 @@ class TCPBitmapClient (private var address: InetAddress, private var port: Int, 
     @Volatile private var cancelled = false
     private lateinit var bufferedWriter: BufferedWriter
     private lateinit var outputStreamWriter: OutputStreamWriter
+    private lateinit var dataInputStream: DataInputStream
 
     interface OnTCPBitmapEvent {
         fun onReceiveTCPBitmap(image: Bitmap, tcpRef: TCPBitmapClient)
+        fun onReceiveTCPHeader(header: ByteArray, tcpRef: TCPBitmapClient)
         fun onConnectTCP(tcpRef: TCPBitmapClient)
-        fun onDisconnectTCP(tcpRef: TCPBitmapClient)
+        fun onDisconnectTCP(reason: String?, tcpRef: TCPBitmapClient)
     }
 
     fun stopListener() {
@@ -81,6 +82,14 @@ class TCPBitmapClient (private var address: InetAddress, private var port: Int, 
                 Log.d(Const.TAG, "Closing bufferedWriter in stopListener caused IOException, this is probably ok")
             }
         }
+        if (::dataInputStream.isInitialized) {
+            try {
+                Log.d(Const.TAG, "Closing dataInputStream")
+                dataInputStream.close()
+            } catch (e: IOException) {
+                Log.d(Const.TAG, "Closing dataInputStream in stopListener caused IOException, this is probably ok")
+            }
+        }
     }
 
     // In a separate function so we can "return" any time to bail out
@@ -89,7 +98,7 @@ class TCPBitmapClient (private var address: InetAddress, private var port: Int, 
             socket = Socket(address, port)
         } catch (e: Exception) {
             Log.e(Const.TAG, "Failed to connect to $address:$port with exception $e")
-            MainActivity.doUiThread { callback.onDisconnectTCP(this) }
+            MainActivity.doUiThread { callback.onDisconnectTCP(null,this) }
             return
         }
 
@@ -97,21 +106,35 @@ class TCPBitmapClient (private var address: InetAddress, private var port: Int, 
         try {
             outputStreamWriter = OutputStreamWriter(socket.getOutputStream())
             bufferedWriter = BufferedWriter(outputStreamWriter)
+            dataInputStream = DataInputStream(socket.getInputStream())
         } catch (e: IOException) {
             Log.e(Const.TAG, "Exception while opening socket buffers $e")
             closeBuffers()
-            MainActivity.doUiThread { callback.onDisconnectTCP(this) }
+            MainActivity.doUiThread { callback.onDisconnectTCP(null,this) }
             return
         }
 
         // Connection should be established, everything is ready to read and write
         MainActivity.doUiThread { callback.onConnectTCP(this) }
 
+        // There is always a header at the start before the PNG stream, read that first
+        var header = ByteArray(Const.TCP_INTRO_HEADER)
+        try {
+            dataInputStream.readFully(header)
+        } catch (e: IOException) {
+            Log.d(Const.TAG, "Failed to receive initial header, connection has failed")
+            cancelled = true
+        }
+        if (!cancelled) {
+            MainActivity.doUiThread { callback.onReceiveTCPHeader(header, this) }
+        }
+
         // Start reading from the socket, any writes happen from another thread
+        var reason: String? = null
         while (!cancelled) {
             var bitmap: Bitmap? = null
             try {
-                bitmap = BitmapFactory.decodeStream(socket.getInputStream())
+                bitmap = BitmapFactory.decodeStream(dataInputStream)
             } catch (e: IOException) {
                 Log.d(Const.TAG, "Exception during socket bitmap decode $e")
                 bitmap = null
@@ -119,6 +142,7 @@ class TCPBitmapClient (private var address: InetAddress, private var port: Int, 
             if (bitmap == null) {
                 Log.d(Const.TAG, "Bitmap decode returned null, connection has failed")
                 cancelled = true
+                reason = "Bitmap decode failure"
             } else {
                 MainActivity.doUiThread { callback.onReceiveTCPBitmap(bitmap, this) }
             }
@@ -128,7 +152,7 @@ class TCPBitmapClient (private var address: InetAddress, private var port: Int, 
         closeBuffers()
 
         // The connection is gone, tell the listener in case they need to update the UI
-        MainActivity.doUiThread { callback.onDisconnectTCP(this) }
+        MainActivity.doUiThread { callback.onDisconnectTCP(reason, this) }
     }
 
     // Constructor starts a new thread to handle the blocking outbound connection

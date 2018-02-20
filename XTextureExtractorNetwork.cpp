@@ -36,7 +36,7 @@
 using namespace std;
 #include "lodepng/lodepng.h"
 
-int hack_y = 1800;
+int last_cockpit_texture_seq = -1; // Track when the aircraft changes, and restart the connection so we can resend the updated header
 
 DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 {
@@ -109,12 +109,29 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 			WSACleanup();
 			return 1;
 		}
-		log_printf("Accepted new connection, will start transmitting images\n");
+		log_printf("Accepted new connection, will start transmitting images, texture seq is %d\n", cockpit_texture_seq);
 
+		last_cockpit_texture_seq = cockpit_texture_seq;
 		std::vector<unsigned char> png_data;
+
+		char header[TCP_INTRO_HEADER];
+		memset(header, 0x00, TCP_INTRO_HEADER);
+		char *hptr = header;
+		hptr += sprintf(hptr, "%s %s %s\n", TCP_PLUGIN_VERSION, __DATE__, __TIME__);
+		hptr += sprintf(hptr, "%s\n", cockpit_aircraft_name);
+		hptr += sprintf(hptr, "%d %d\n", cockpit_texture_width, cockpit_texture_height);
+		for (int i = 0; i < cockpit_window_limit; i++) {
+			hptr += sprintf(hptr, "%s %d %d %d %d\n", _g_window_name[i], _g_texture_lbrt[i][0], _g_texture_lbrt[i][1], _g_texture_lbrt[i][2], _g_texture_lbrt[i][3]);
+		}
+		hptr += sprintf(hptr, "__EOF__\n");
 
 		// Keep transmitting until the connection fails
 		do {
+			if (last_cockpit_texture_seq != cockpit_texture_seq) {
+				log_printf("Texture sequence number has increased from %d to %d, so restarting connection\n", last_cockpit_texture_seq, cockpit_texture_seq);
+				closesocket(ClientSocket);
+				break; // Exit the loop
+			}
 			if (cockpit_texture_id <= 0) {
 				log_printf("No texture is currently found, cannot begin transmission ... sleeping for 1 second\n");
 				Sleep(1000);
@@ -135,6 +152,24 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 					}
 				}
 			*/
+
+			// Send the header data to the socket if we haven't sent it yet
+			if (hptr) {
+				const char *sendData = header;
+				hptr = NULL;
+				iSendResult = send(ClientSocket, sendData, TCP_INTRO_HEADER, 0);
+				if (iSendResult == SOCKET_ERROR) {
+					log_printf("Error: TCP send failed with code %d\n", WSAGetLastError());
+					closesocket(ClientSocket);
+					break; // Exit the loop
+				}
+				else if (iSendResult != TCP_INTRO_HEADER) {
+					log_printf("Error: TCP transmission was %d bytes but expected to send %zu bytes\n", iSendResult, png_data.size());
+				}
+				else {
+					log_printf("Successfully sent header of %d bytes\n", TCP_INTRO_HEADER);
+				}
+			}
 
 			// Write out the RGBA image as an RGB image with lodepng
 			lodepng::State state;
@@ -158,7 +193,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 			} else if (iSendResult != png_data.size()) {
 				log_printf("Error: TCP transmission was %d bytes but expected to send %zu bytes\n", iSendResult, png_data.size());
 			} else {
-				log_printf("Successfully sent PNG image of %dx%d with %d compressed bytes\n", cockpit_texture_width, hack_y, iSendResult);
+				// log_printf("Successfully sent PNG image of %dx%d with %d compressed bytes\n", cockpit_texture_width, cockpit_texture_height, iSendResult);
 			}
 
 			// Write to a disk file for debugging

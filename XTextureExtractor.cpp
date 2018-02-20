@@ -28,7 +28,6 @@ using namespace std;
 
 
 // Set some arbitrary limit on the number of windows that can be supported
-#define COCKPIT_MAX_WINDOWS 20
 static XPLMWindowID	g_window[COCKPIT_MAX_WINDOWS];
 XPLMDataRef gAcfNotes = NULL;
 GLint cockpit_texture_id = 0;
@@ -37,6 +36,7 @@ GLint cockpit_texture_height = -1;
 GLint cockpit_texture_format = -1;
 GLint cockpit_texture_last = 3000; // This is the starting point for our texture search, it needs to be higher than any texture id and I can't query for it
 GLint cockpit_texture_jump = 1000; // Whenever the aircraft switches, bump up the last texture id, because this plugin seems to cause texture ids to exceed, not sure what the limit is here
+int   cockpit_texture_seq = 1;     // Increment this each time we change aircraft or textures, so we can restart the network connection
 bool  cockpit_dirty = false;
 bool  cockpit_aircraft_known = false;
 char  cockpit_aircraft_name[256];
@@ -121,8 +121,8 @@ static int _g_save_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, 
 static int _g_clear_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_dump_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 
-static char  _g_window_name[COCKPIT_MAX_WINDOWS][256];  // titles of each window
-static int _g_texture_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
+char _g_window_name[COCKPIT_MAX_WINDOWS][256];  // titles of each window
+int _g_texture_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 
 static int	coord_in_rect(int x, int y, int * bounds_lbrt)  { return ((x >= bounds_lbrt[0]) && (x < bounds_lbrt[2]) && (y < bounds_lbrt[3]) && (y >= bounds_lbrt[1])); }
 
@@ -152,7 +152,7 @@ PLUGIN_API int XPluginStart(
 
 	strcpy(outName, "XTextureExtractorPlugin");
 	strcpy(outSig, "net.waynepiekarski.windowcockpitplugin");
-	sprintf(outDesc, "Extracts out cockpit textures into a separate window - compiled %s %s", __DATE__, __TIME__);
+	sprintf(outDesc, "%s - Extracts out cockpit textures into a separate window - compiled %s %s", TCP_PLUGIN_VERSION, __DATE__, __TIME__);
 	log_printf("XPluginStart: XTextureExtractor plugin - %s - path %s\n", outDesc, plugin_path);
 
 	// Register to listen for aircraft notes information, so we can detect Zibo 738 later
@@ -386,6 +386,7 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 	if (cockpit_dirty) {
 		log_printf("Detected aircraft dirty flag set, so finding texture\n");
 		find_last_match_in_texture(-1);
+		cockpit_texture_seq++;
 		cockpit_dirty = false;
 	}
 

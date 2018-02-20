@@ -10,4 +10,5 @@
 
     <color name="app_background">#FF400000</color>
 
+    <string name="help_text">XTextureExtractor: Click the display to bring up help and usage information.\nClick the connection status to specify a manual hostname.</string>
 </resources>

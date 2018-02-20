@@ -40,6 +40,10 @@ import android.content.Context
 import android.os.*
 import android.text.InputType
 import android.view.SoundEffectConstants
+import java.io.BufferedReader
+import java.io.ByteArrayInputStream
+import java.io.IOException
+import java.io.InputStreamReader
 import java.net.UnknownHostException
 
 
@@ -50,7 +54,7 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
     private var connectAddress: String? = null
     private var manualAddress: String = ""
     private var manualInetAddress: InetAddress? = null
-    private var connectActNotes: String = ""
+    private var connectAircraft: String = ""
     private var connectWorking = false
     private var connectShutdown = false
     private var connectFailures = 0
@@ -75,7 +79,7 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
 
         // Reset the text display to known 24 column text so the layout pass can work correctly
         resetDisplay()
-        Toast.makeText(this, "Click the display to bring up help and usage information.\nClick the connection status to specify a manual hostname.", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, R.string.help_text, Toast.LENGTH_LONG).show()
 
         // Miscellaneous counters that also need reset
         connectFailures = 0
@@ -229,7 +233,7 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
         setConnectionStatus("Closing down network", "", "Wait a few seconds")
         connectAddress = null
         connectWorking = false
-        connectActNotes = ""
+        connectAircraft = ""
         if (tcp_extplane != null) {
             Log.d(Const.TAG, "Cleaning up any TCP connections")
             tcp_extplane!!.stopListener()
@@ -315,10 +319,14 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
         // The socket isn't fully connected, so don't update the UI yet
     }
 
-    override fun onDisconnectTCP(tcpRef: TCPBitmapClient) {
+    override fun onDisconnectTCP(reason: String?, tcpRef: TCPBitmapClient) {
         if (tcpRef != tcp_extplane)
             return
         Log.d(Const.TAG, "onDisconnectTCP(): Closing down TCP connection and will restart")
+        if (reason != null) {
+            Log.d(Const.TAG, "Network failed due to reason [$reason]")
+            Toast.makeText(this, "Network failed - $reason", Toast.LENGTH_LONG).show()
+        }
         connectFailures++
         restartNetworking()
     }
@@ -332,12 +340,55 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
         if (!connectWorking) {
             // Everything is working with actual data coming back.
             connectFailures = 0
-            setConnectionStatus("XTextureExtractor", "", "", "$connectAddress:${Const.TCP_PLUGIN_PORT}")
+            setConnectionStatus("XTextureExtractor", connectAircraft, "", "$connectAddress:${Const.TCP_PLUGIN_PORT}")
             connectWorking = true
         }
 
         // Store the image into the layout, which will resize it to fit the screen
         // Log.d(Const.TAG, "TCP returned bitmap $image with ${image.width}x${image.height}")
         textureImage.setImageBitmap(image)
+    }
+
+    private fun networkingFatal(reason: String) {
+        Log.d(Const.TAG, "Network fatal error due to reason [$reason]")
+        Toast.makeText(this, "Network error - $reason", Toast.LENGTH_LONG).show()
+    }
+
+    override fun onReceiveTCPHeader(header: ByteArray, tcpRef: TCPBitmapClient) {
+        var headerStr = String(header)
+        headerStr = headerStr.substring(0, headerStr.indexOf(0x00.toChar()))
+        Log.d(Const.TAG, "Received raw header [$headerStr] before PNG stream")
+        try {
+            val bufferedReader = BufferedReader(InputStreamReader(ByteArrayInputStream(header)))
+            val version = bufferedReader.readLine().split(' ')[0]
+            val aircraft = bufferedReader.readLine()
+            val texture = bufferedReader.readLine().split(' ')
+            val textureWidth = texture[0].toInt()
+            val textureHeight = texture[1].toInt()
+            Log.d(Const.TAG, "Plugin version [$version], aircraft [$aircraft], texture ${textureWidth}x${textureHeight}")
+            var line: String?
+            while (true) {
+                line = bufferedReader.readLine()
+                if (line == null || line.contains("__EOF__"))
+                    break
+                val window = line.split(' ')
+                val name = window[0]
+                val l = window[1].toInt()
+                val t = window[2].toInt()
+                val r = window[3].toInt()
+                val b = window[4].toInt()
+                Log.d(Const.TAG, "Window [$name] = ($l,$t)->($r,$b)")
+            }
+            connectAircraft = "$aircraft ${textureWidth}x${textureHeight}"
+            if (version != Const.TCP_PLUGIN_VERSION) {
+                networkingFatal("Version [$version] is not expected [$Const.TCP_PLUGIN_VERSION]")
+            }
+        } catch (e: IOException) {
+            Log.e(Const.TAG, "IOException processing header - $e")
+            networkingFatal("Invalid header data")
+        } catch (e: Exception) {
+            Log.e(Const.TAG, "Unknown exception processing header - $e")
+            networkingFatal("Invalid header read")
+        }
     }
 }
