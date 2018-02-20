@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// X-Plane 11 Plugins
+// XTextureExtractor
 //
 // Copyright (C) 2018 Wayne Piekarski
 // wayne@tinmith.net http://tinmith.net/wayne
@@ -21,34 +21,11 @@
 // ---------------------------------------------------------------------
 
 
-#include "XPLMDisplay.h"
-#include "XPLMGraphics.h"
-#include "XPLMUtilities.h"
-#include "XPLMPlanes.h"
-#include "XPLMDataAccess.h"
-#include "XPLMPlugin.h"
-#include <string.h>
-#include <stdio.h>
-#if IBM
-	#include <windows.h>
-#endif
-#if LIN
-	#include <GL/gl.h>
-#elif __GNUC__
-	#include <OpenGL/gl.h>
-#else
-	#include <GL/gl.h>
-#endif
-
-#ifndef XPLM300
-	#error This is made to be compiled against the XPLM300 SDK
-#endif
+#include "XTextureExtractor.h"
 #include <vector>
 using namespace std;
 #include "lodepng/lodepng.h"
 
-char __log_printf_buffer[4096];
-#define log_printf(fmt, ...) snprintf(__log_printf_buffer, 4096, "XTextureExtractor: " fmt, __VA_ARGS__), XPLMDebugString(__log_printf_buffer)
 
 // Set some arbitrary limit on the number of windows that can be supported
 #define COCKPIT_MAX_WINDOWS 20
@@ -149,6 +126,15 @@ static int _g_texture_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 
 static int	coord_in_rect(int x, int y, int * bounds_lbrt)  { return ((x >= bounds_lbrt[0]) && (x < bounds_lbrt[2]) && (y < bounds_lbrt[3]) && (y >= bounds_lbrt[1])); }
 
+#undef DEBUG_KEYPRESS
+// Activate this code when you need to have a key event control a variable
+#ifdef DEBUG_KEYPRESS
+int debug_key_state = 0;
+void process_debug_key(void *refCon) {
+	debug_key_state = 1 - debug_key_state;
+	log_printf("Debug key press detected, change to %d state\n", debug_key_state);
+}
+#endif
 
 PLUGIN_API int XPluginStart(
 						char *		outName,
@@ -174,6 +160,15 @@ PLUGIN_API int XPluginStart(
 
 	// Global save button that increments each time
 	strcpy(cockpit_save_string, "Sv");
+
+	// Implement a debugging key if we need it
+#ifdef DEBUG_KEYPRESS
+#pragma message("DEBUG_KEYPRESS enabled")
+	XPLMRegisterHotKey(XPLM_VK_F8, xplm_DownFlag, "F9", process_debug_key, NULL);
+#endif
+
+	log_printf("Starting network thread to listen for XTextureExtractor clients\n");
+	start_networking_thread();
 
 	return 1;
 }
@@ -291,7 +286,12 @@ void draw_texture_rect(int leftX, int topY, int rightX, int botY, int maxX, int 
 	glEnd();
 }
 
-void	draw(XPLMWindowID in_window_id, void * in_refcon)
+
+unsigned char texture_buffer[MAX_TEXTURE_WIDTH * MAX_TEXTURE_HEIGHT * 4]; // Ensure we definitely have enough space for 4-byte RGBA
+unsigned char *texture_pointer = NULL; // When this is null, the image has been sent and we need to capture a new one
+
+
+void draw(XPLMWindowID in_window_id, void * in_refcon)
 {
 	float col_white[] = {1.0, 1.0, 1.0};
 
@@ -393,7 +393,20 @@ void	draw(XPLMWindowID in_window_id, void * in_refcon)
 	int *g_texture_lbrt = &_g_texture_lbrt[win_num][0];
 
 	if (cockpit_aircraft_known) {
+		// Draw the texture to the window
 		draw_texture_rect(g_texture_lbrt[0], g_texture_lbrt[1], g_texture_lbrt[2], g_texture_lbrt[3], cockpit_texture_width, cockpit_texture_height, l, t - topInset, r, b);
+
+		// Check to see if we need to prepare a new texture image to send, only capture a new one if the previous has been consumed
+		if (texture_pointer == NULL) {
+			// GL_RGBA is the fastest (52 -> 37 fps), then GL_RGB (52 -> 31 fps), and GL_BGR_EXT is the slowest (52 -> 28 fps).
+			// glTexSubImage2D doesn't seem to work, always returns a black image
+			// glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, cockpit_texture_width, cockpit_texture_height, GL_RGBA, GL_UNSIGNED_BYTE, texture_buffer);
+			glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_buffer);
+
+			// Image is now captured, so set the pointer and we wait for the network thread to compress and send it
+			texture_pointer = texture_buffer;
+			log_printf("Captured texture buffer, ready for transmission\n");
+		}
 	} else {
 		// Draw an X on the window for unknown aircraft
 		// Note that it shows up as black since the texture units are active, but I don't want to change this

@@ -152,10 +152,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="lodepng\lodepng.cpp" />
+    <ClCompile Include="XTextureExtractorNetwork.cpp" />
     <ClCompile Include="XTextureExtractor.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="lodepng\lodepng.h" />
+    <ClInclude Include="XTextureExtractor.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
