@@ -406,7 +406,7 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 
 			// Image is now captured, so set the pointer and we wait for the network thread to compress and send it
 			texture_pointer = texture_buffer;
-			log_printf("Captured texture buffer, ready for transmission\n");
+			// log_printf("Captured texture buffer, ready for transmission\n");
 		}
 	} else {
 		// Draw an X on the window for unknown aircraft

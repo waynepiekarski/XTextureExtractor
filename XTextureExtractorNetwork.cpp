@@ -38,6 +38,9 @@ using namespace std;
 
 int last_cockpit_texture_seq = -1; // Track when the aircraft changes, and restart the connection so we can resend the updated header
 
+unsigned char sub_buffer[MAX_TEXTURE_WIDTH * MAX_TEXTURE_HEIGHT * 4]; // Ensure we definitely have enough space for 4-byte RGBA images of any supported size
+
+
 DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 {
 	log_printf("Start of threaded TCP listener code\n");
@@ -137,8 +140,8 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 				Sleep(1000);
 				continue;
 			} else if (texture_pointer == NULL) {
-				log_printf("Texture id is valid but not texture is ready, will wait 100 msec\n");
-				Sleep(100);
+				// log_printf("Texture id is valid but no texture is ready, will wait 10 msec\n");
+				Sleep(10); // Cannot ever exceed 100 fps
 				continue;
 			}
 			
@@ -171,15 +174,49 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 				}
 			}
 
-			// Write out the RGBA image as an RGB image with lodepng
-			lodepng::State state;
-			state.info_raw.colortype = LCT_RGBA; // Input type
-			state.info_raw.bitdepth = 8;
-			state.info_png.color.colortype = LCT_RGB; // Output type
-			state.info_png.color.bitdepth = 8;
-			state.encoder.auto_convert = 0; // Must provide this or will ignore the input/output types
+			// Reset the output buffer
 			png_data.clear();
-			unsigned error = lodepng::encode(png_data, texture_pointer, cockpit_texture_width, cockpit_texture_height, state);
+
+			// Encode each window in the texture as a separate image
+			for (int i = 0; i < cockpit_window_limit; i++) {
+
+				// Write the window id to the start, pad to 4 bytes
+				png_data.insert(png_data.end(), '!');
+				png_data.insert(png_data.end(), '_');
+				png_data.insert(png_data.end(), (unsigned char)i);
+				png_data.insert(png_data.end(), '_');
+
+				// Compute sub-image dimensions
+				int x1 = _g_texture_lbrt[i][0]; // L
+				int y1 = cockpit_texture_height - _g_texture_lbrt[i][1]; // B
+				int x2 = _g_texture_lbrt[i][2]; // R
+				int y2 = cockpit_texture_height - _g_texture_lbrt[i][3]; // T
+				int in_stride = cockpit_texture_width * 4;
+				int out_stride = (x2 - x1) * 4;
+				int out_rows = -(y2 - y1);
+				if (out_stride < 0)
+					log_printf("Error! Negative out_stride value %d\n", out_stride);
+				if (out_rows < 0)
+					log_printf("Error! Negative out_rows value %d\n", out_rows);
+
+				// Copy the sub-image into a temporary buffer, flip the image since it is inverted
+				unsigned char *src = texture_pointer + (y1 * in_stride) + (x1 * 4);
+				unsigned char *dest = &sub_buffer[0];
+				for (int r = 0; r < out_rows; r++) {
+					memcpy(dest, src, out_stride);
+					src -= in_stride;
+					dest += out_stride;
+				}
+
+				// Write out the RGBA image as an RGB image with lodepng
+				lodepng::State state;
+				state.info_raw.colortype = LCT_RGBA; // Input type
+				state.info_raw.bitdepth = 8;
+				state.info_png.color.colortype = LCT_RGB; // Output type
+				state.info_png.color.bitdepth = 8;
+				state.encoder.auto_convert = 0; // Must provide this or will ignore the input/output types
+				unsigned error = lodepng::encode(png_data, &sub_buffer[0], x2 - x1, -(y2 - y1), state);
+			}
 
 			// Now that the image is compressed, we can throw away the texture capture and tell the main thread to start capturing a new one immediately
 			texture_pointer = NULL;
