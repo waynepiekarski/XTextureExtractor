@@ -28,6 +28,7 @@
 #include <ws2tcpip.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <list>
 
 #pragma comment (lib, "Ws2_32.lib")
 
@@ -36,10 +37,25 @@
 using namespace std;
 #include "lodepng/lodepng.h"
 
-int last_cockpit_texture_seq = -1; // Track when the aircraft changes, and restart the connection so we can resend the updated header
+int last_cockpit_texture_seq = -2; // Track when the aircraft changes, and restart the connection so we can resend the updated header
 
 unsigned char sub_buffer[MAX_TEXTURE_WIDTH * MAX_TEXTURE_HEIGHT * 4]; // Ensure we definitely have enough space for 4-byte RGBA images of any supported size
 
+std::list<SOCKET> connections;
+char header[TCP_INTRO_HEADER];
+
+void recompute_header() {
+	log_printf("Recomputing TCP header for [%s] at %dx%d\n", cockpit_aircraft_name, cockpit_texture_width, cockpit_texture_height);
+	memset(header, 0x00, TCP_INTRO_HEADER);
+	char *hptr = header;
+	hptr += sprintf(hptr, "%s %s %s\n", TCP_PLUGIN_VERSION, __DATE__, __TIME__);
+	hptr += sprintf(hptr, "%s\n", cockpit_aircraft_name);
+	hptr += sprintf(hptr, "%d %d\n", cockpit_texture_width, cockpit_texture_height);
+	for (int i = 0; i < cockpit_window_limit; i++) {
+		hptr += sprintf(hptr, "%s %d %d %d %d\n", _g_window_name[i], _g_texture_lbrt[i][0], _g_texture_lbrt[i][1], _g_texture_lbrt[i][2], _g_texture_lbrt[i][3]);
+	}
+	hptr += sprintf(hptr, "__EOF__\n");
+}
 
 DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 {
@@ -48,16 +64,19 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 	int iResult;
 
 	SOCKET ListenSocket = INVALID_SOCKET;
-	SOCKET ClientSocket = INVALID_SOCKET;
 
 	struct addrinfo *result = NULL;
 	struct addrinfo hints;
 
 	int iSendResult;
 
+	// This thread was spawned by the main plugin, so recompute the header now, we know it is valid
+	recompute_header();
+	last_cockpit_texture_seq = cockpit_texture_seq;
+
 	iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (iResult != 0) {
-		log_printf("WSAStartup failed with error: %d\n", iResult);
+		log_printf("Fatal: WSAStartup failed with error: %d\n", iResult);
 		return 1;
 	}
 
@@ -70,14 +89,14 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 	log_printf("Opening up socket to listen on port %s\n", TCP_PLUGIN_PORT);
 	iResult = getaddrinfo(NULL, TCP_PLUGIN_PORT, &hints, &result);
 	if (iResult != 0) {
-		log_printf("getaddrinfo failed with error: %d\n", iResult);
+		log_printf("Fatal: getaddrinfo failed with error: %d\n", iResult);
 		WSACleanup();
 		return 1;
 	}
 
 	ListenSocket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
 	if (ListenSocket == INVALID_SOCKET) {
-		printf("socket failed with error: %ld\n", WSAGetLastError());
+		log_printf("Fatal: socket failed with error: %ld\n", WSAGetLastError());
 		freeaddrinfo(result);
 		WSACleanup();
 		return 1;
@@ -85,7 +104,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 
 	iResult = bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
 	if (iResult == SOCKET_ERROR) {
-		log_printf("bind failed with error: %d\n", WSAGetLastError());
+		log_printf("Fatal: bind failed with error: %d\n", WSAGetLastError());
 		freeaddrinfo(result);
 		closesocket(ListenSocket);
 		WSACleanup();
@@ -96,172 +115,191 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 
 	iResult = listen(ListenSocket, SOMAXCONN);
 	if (iResult == SOCKET_ERROR) {
-		log_printf("listen failed with error: %d\n", WSAGetLastError());
+		log_printf("Fatal: listen failed with error: %d\n", WSAGetLastError());
 		closesocket(ListenSocket);
 		WSACleanup();
 		return 1;
 	}
+
+	u_long non_block = 1;
+	iResult = ioctlsocket(ListenSocket, FIONBIO, &non_block);
+	if (iResult == SOCKET_ERROR) {
+		log_printf("Fatal: failed to set non-blocking mode on listen socket: %d\n", WSAGetLastError());
+		closesocket(ListenSocket);
+		WSACleanup();
+		return 1;
+	}
+
 	log_printf("Waiting for incoming TCP connections on port %s\n", TCP_PLUGIN_PORT);
 
 	while (1) {
-		// Accept client connections, and handle just this one until it fails, then wait for the next one
-		ClientSocket = accept(ListenSocket, NULL, NULL);
-		if (ClientSocket == INVALID_SOCKET) {
-			printf("accept failed with error: %d\n", WSAGetLastError());
-			closesocket(ListenSocket);
-			WSACleanup();
-			return 1;
-		}
-		log_printf("Accepted new connection, will start transmitting images, texture seq is %d\n", cockpit_texture_seq);
-
-		last_cockpit_texture_seq = cockpit_texture_seq;
-		std::vector<unsigned char> png_data;
-
-		char header[TCP_INTRO_HEADER];
-		memset(header, 0x00, TCP_INTRO_HEADER);
-		char *hptr = header;
-		hptr += sprintf(hptr, "%s %s %s\n", TCP_PLUGIN_VERSION, __DATE__, __TIME__);
-		hptr += sprintf(hptr, "%s\n", cockpit_aircraft_name);
-		hptr += sprintf(hptr, "%d %d\n", cockpit_texture_width, cockpit_texture_height);
-		for (int i = 0; i < cockpit_window_limit; i++) {
-			hptr += sprintf(hptr, "%s %d %d %d %d\n", _g_window_name[i], _g_texture_lbrt[i][0], _g_texture_lbrt[i][1], _g_texture_lbrt[i][2], _g_texture_lbrt[i][3]);
-		}
-		hptr += sprintf(hptr, "__EOF__\n");
-
-		// Keep transmitting until the connection fails
-		do {
-			if (last_cockpit_texture_seq != cockpit_texture_seq) {
-				log_printf("Texture sequence number has increased from %d to %d, so restarting connection\n", last_cockpit_texture_seq, cockpit_texture_seq);
-				closesocket(ClientSocket);
-				break; // Exit the loop
+		// Check if there are any new connections, it is ok to not have any new ones and just maintain what we have
+		SOCKET newClientSocket = INVALID_SOCKET;
+		newClientSocket = accept(ListenSocket, NULL, NULL);
+		if (newClientSocket == INVALID_SOCKET) {
+			// See if the error was fatal or no new connection
+			if (WSAGetLastError() != WSAEWOULDBLOCK) {
+				log_printf("Fatal: accept failed with error: %d\n", WSAGetLastError());
+				closesocket(ListenSocket);
+				WSACleanup();
+				return 1;
 			}
-			if (cockpit_texture_id <= 0) {
-				log_printf("No texture is currently found, cannot begin transmission ... sleeping for 1 second\n");
+
+			// If we don't have any connections, then lets sleep to rate limit this thread and loop around
+			if (connections.size() == 0) {
+				// log_printf("No incoming connection found, sleeping for 1 second ...\n");
 				Sleep(1000);
 				continue;
-			} else if (texture_pointer == NULL) {
-				// log_printf("Texture id is valid but no texture is ready, will wait 10 msec\n");
-				Sleep(10); // Cannot ever exceed 100 fps
-				continue;
 			}
-			
-			// Debug code that draws a grid to the buffer to check if it is working
-			/*
-			for (int y = 0; y < cockpit_texture_height; y += 16)
-				for (int x = 0; x < cockpit_texture_width; x += 16) {
-					if (y % 16 == 0 || x % 16 == 0) {
-						int ofs = (y * cockpit_texture_width + x) * 4;
-						texture_pointer[ofs] = 0xFF; // Set red pixel, draw a grid
-					}
-				}
-			*/
+		}
+		else {
+			log_printf("Accepted new connection, will start transmitting images, texture seq is %d, total connections is %zu\n", cockpit_texture_seq, connections.size());
 
-			// Send the header data to the socket if we haven't sent it yet
-			if (hptr) {
-				const char *sendData = header;
-				hptr = NULL;
-				iSendResult = send(ClientSocket, sendData, TCP_INTRO_HEADER, 0);
-				if (iSendResult == SOCKET_ERROR) {
-					log_printf("Error: TCP send failed with code %d\n", WSAGetLastError());
-					closesocket(ClientSocket);
-					break; // Exit the loop
-				}
-				else if (iSendResult != TCP_INTRO_HEADER) {
-					log_printf("Error: TCP transmission was %d bytes but expected to send %zu bytes\n", iSendResult, png_data.size());
-				}
-				else {
-					log_printf("Successfully sent header of %d bytes\n", TCP_INTRO_HEADER);
-				}
+			int iOptVal = TCP_SEND_BUFFER; // Make sure this is very large to prevent WSAEWOULDBLOCK=10035 when the network gets clogged up
+			int iOptLen = sizeof(int);
+			iResult = setsockopt(newClientSocket, SOL_SOCKET, SO_SNDBUF, (char *)&iOptVal, iOptLen);
+			if (iResult == SOCKET_ERROR) {
+				log_printf("Fatal: failed to set SO_SNDBUF to %d: %d\n", TCP_SEND_BUFFER, WSAGetLastError());
+				closesocket(newClientSocket);
+				for (auto s : connections)
+					closesocket(s);
+				WSACleanup();
+				return 1;
 			}
-
-			// Reset the output buffer
-			png_data.clear();
-
-			// Encode each window in the texture as a separate image
-			for (int i = 0; i < cockpit_window_limit; i++) {
-
-				// Write the window id to the start, pad to 4 bytes
-				png_data.insert(png_data.end(), '!');
-				png_data.insert(png_data.end(), '_');
-				png_data.insert(png_data.end(), (unsigned char)i);
-				png_data.insert(png_data.end(), '_');
-
-				// Compute sub-image dimensions
-				int x1 = _g_texture_lbrt[i][0]; // L
-				int y1 = cockpit_texture_height - _g_texture_lbrt[i][1]; // B
-				int x2 = _g_texture_lbrt[i][2]; // R
-				int y2 = cockpit_texture_height - _g_texture_lbrt[i][3]; // T
-				int in_stride = cockpit_texture_width * 4;
-				int out_stride = (x2 - x1) * 4;
-				int out_rows = -(y2 - y1);
-				if (out_stride < 0)
-					log_printf("Error! Negative out_stride value %d\n", out_stride);
-				if (out_rows < 0)
-					log_printf("Error! Negative out_rows value %d\n", out_rows);
-
-				// Copy the sub-image into a temporary buffer, flip the image since it is inverted
-				unsigned char *src = texture_pointer + (y1 * in_stride) + (x1 * 4);
-				unsigned char *dest = &sub_buffer[0];
-				for (int r = 0; r < out_rows; r++) {
-					memcpy(dest, src, out_stride);
-					src -= in_stride;
-					dest += out_stride;
-				}
-
-				// Write out the RGBA image as an RGB image with lodepng
-				lodepng::State state;
-				state.info_raw.colortype = LCT_RGBA; // Input type
-				state.info_raw.bitdepth = 8;
-				state.info_png.color.colortype = LCT_RGB; // Output type
-				state.info_png.color.bitdepth = 8;
-				state.encoder.auto_convert = 0; // Must provide this or will ignore the input/output types
-				unsigned error = lodepng::encode(png_data, &sub_buffer[0], x2 - x1, -(y2 - y1), state);
+			iResult = getsockopt(newClientSocket, SOL_SOCKET, SO_SNDBUF, (char *)&iOptVal, &iOptLen);
+			if (iResult == SOCKET_ERROR) {
+				log_printf("Fatal: failed to query SO_SNDBUF: %d\n", WSAGetLastError());
+				closesocket(newClientSocket);
+				for (auto s : connections)
+					closesocket(s);
+				WSACleanup();
+				return 1;
 			}
+			log_printf("New connection socket SO_SNDBUF is %d, should be %d\n", iOptVal, TCP_SEND_BUFFER);
 
-			// Now that the image is compressed, we can throw away the texture capture and tell the main thread to start capturing a new one immediately
-			texture_pointer = NULL;
-
-			// Send the compressed data to the socket
-			iSendResult = send(ClientSocket, (const char *)png_data.data(), (int)png_data.size(), 0);
+			iSendResult = send(newClientSocket, header, TCP_INTRO_HEADER, 0);
 			if (iSendResult == SOCKET_ERROR) {
-				log_printf("Error: TCP send failed with code %d\n", WSAGetLastError());
-				closesocket(ClientSocket);
-				break; // Exit the loop
-			} else if (iSendResult != png_data.size()) {
-				log_printf("Error: TCP transmission was %d bytes but expected to send %zu bytes\n", iSendResult, png_data.size());
-			} else {
-				// log_printf("Successfully sent PNG image of %dx%d with %d compressed bytes\n", cockpit_texture_width, cockpit_texture_height, iSendResult);
+				log_printf("TCP header send failed with code %d for %d bytes, closing this socket down\n", WSAGetLastError(), TCP_INTRO_HEADER);
+				closesocket(newClientSocket);
 			}
-
-			// Write to a disk file for debugging
-			/*
-			char fname[4096];
-			static int incr = 0;
-			incr++;
-			sprintf(fname, "net_texture_%d.png", incr);
-			FILE *fp = fopen(fname, "wb");
-			if (fp == NULL) {
-				log_printf("Could not save to file\n");
+			else if (iSendResult != TCP_INTRO_HEADER) {
+				log_printf("Fatal: TCP transmission was %d bytes but expected to send %d bytes\n", iSendResult, TCP_INTRO_HEADER);
+				for (auto s : connections)
+					closesocket(s);
+				WSACleanup();
+				return 1;
 			}
 			else {
-				fwrite(png_data.data(), sizeof(unsigned char), png_data.size(), fp);
-				fclose(fp);
-				log_printf("Saved debugging image to %s\n", fname);
+				log_printf("Successfully sent header of %d bytes\n", TCP_INTRO_HEADER);
+				connections.push_back(newClientSocket);
 			}
-			*/
-		} while (iSendResult > 0);
+		}
 
-		// Connection failed, so close this accepted socket
-		iResult = shutdown(ClientSocket, SD_SEND);
-		if (iResult == SOCKET_ERROR) {
-			log_printf("shutdown failed with error: %d\n", WSAGetLastError());
-			closesocket(ClientSocket);
+		std::vector<unsigned char> png_data;
+
+		if (last_cockpit_texture_seq != cockpit_texture_seq) {
+			log_printf("Texture sequence number has increased from %d to %d, so restarting all connections\n", last_cockpit_texture_seq, cockpit_texture_seq);
+			for (auto s : connections)
+				closesocket(s);
+			recompute_header();
+			break; // Exit the loop
+		}
+		last_cockpit_texture_seq = cockpit_texture_seq;
+
+		if (cockpit_texture_id <= 0) {
+			log_printf("No texture is currently found, nothing to transmit ... sleeping for 1 second\n");
+			Sleep(1000);
+			continue;
+		}
+		else if (texture_pointer == NULL) {
+			// log_printf("Texture id is valid but no texture is ready, will wait 10 msec\n");
+			Sleep(10); // Cannot ever exceed 100 fps
+			continue;
+		}
+
+		// Debug code that draws a grid to the buffer to check if it is working
+		/*
+		for (int y = 0; y < cockpit_texture_height; y += 16)
+			for (int x = 0; x < cockpit_texture_width; x += 16) {
+				if (y % 16 == 0 || x % 16 == 0) {
+					int ofs = (y * cockpit_texture_width + x) * 4;
+					texture_pointer[ofs] = 0xFF; // Set red pixel, draw a grid
+				}
+			}
+		*/
+
+		// Reset the output buffer
+		png_data.clear();
+
+		// Encode each window in the texture as a separate image
+		for (int i = 0; i < cockpit_window_limit; i++) {
+
+			// Write the window id to the start, pad to 4 bytes
+			png_data.insert(png_data.end(), '!');
+			png_data.insert(png_data.end(), '_');
+			png_data.insert(png_data.end(), (unsigned char)i);
+			png_data.insert(png_data.end(), '_');
+
+			// Compute sub-image dimensions
+			int x1 = _g_texture_lbrt[i][0]; // L
+			int y1 = cockpit_texture_height - _g_texture_lbrt[i][1]; // B
+			int x2 = _g_texture_lbrt[i][2]; // R
+			int y2 = cockpit_texture_height - _g_texture_lbrt[i][3]; // T
+			int in_stride = cockpit_texture_width * 4;
+			int out_stride = (x2 - x1) * 4;
+			int out_rows = -(y2 - y1);
+			if (out_stride < 0)
+				log_printf("Error! Negative out_stride value %d\n", out_stride);
+			if (out_rows < 0)
+				log_printf("Error! Negative out_rows value %d\n", out_rows);
+
+			// Copy the sub-image into a temporary buffer, flip the image since it is inverted
+			unsigned char *src = texture_pointer + (y1 * in_stride) + (x1 * 4);
+			unsigned char *dest = &sub_buffer[0];
+			for (int r = 0; r < out_rows; r++) {
+				memcpy(dest, src, out_stride);
+				src -= in_stride;
+				dest += out_stride;
+			}
+
+			// Write out the RGBA image as an RGB image with lodepng
+			lodepng::State state;
+			state.info_raw.colortype = LCT_RGBA; // Input type
+			state.info_raw.bitdepth = 8;
+			state.info_png.color.colortype = LCT_RGB; // Output type
+			state.info_png.color.bitdepth = 8;
+			state.encoder.auto_convert = 0; // Must provide this or will ignore the input/output types
+			unsigned error = lodepng::encode(png_data, &sub_buffer[0], x2 - x1, -(y2 - y1), state);
+		}
+
+		// Now that the image is compressed, we can throw away the texture capture and tell the main thread to start capturing a new one immediately
+		texture_pointer = NULL;
+
+		// Send the compressed data to the socket
+		for (auto s = connections.begin(); s != connections.end(); ) {
+			// log_printf("Sending PNG data to socket %zu\n", *s);
+			iSendResult = send(*s, (const char *)png_data.data(), (int)png_data.size(), 0);
+			if (iSendResult == SOCKET_ERROR) {
+				log_printf("Connection closed: TCP PNG send of %zu bytes failed with code %d\n", png_data.size(), WSAGetLastError());
+				closesocket(*s);
+				s = connections.erase(s); // Increment iterator
+			}
+			else if (iSendResult != png_data.size()) {
+				log_printf("Fatal: TCP transmission was %d bytes but expected to send %zu bytes\n", iSendResult, png_data.size());
+				for (auto s : connections)
+					closesocket(s);
+				WSACleanup();
+				return 1;
+			}
+			else {
+				// log_printf("Successfully sent PNG image of %dx%d with %d compressed bytes\n", cockpit_texture_width, cockpit_texture_height, iSendResult);
+				++s; // Increment iterator
+			}
 		}
 	}
 
 	// Unreachable code - shut down everything
 	closesocket(ListenSocket);
-	closesocket(ClientSocket);
 	WSACleanup();
 
 	return 0;

@@ -36,7 +36,7 @@ GLint cockpit_texture_height = -1;
 GLint cockpit_texture_format = -1;
 GLint cockpit_texture_last = 3000; // This is the starting point for our texture search, it needs to be higher than any texture id and I can't query for it
 GLint cockpit_texture_jump = 1000; // Whenever the aircraft switches, bump up the last texture id, because this plugin seems to cause texture ids to exceed, not sure what the limit is here
-int   cockpit_texture_seq = 1;     // Increment this each time we change aircraft or textures, so we can restart the network connection
+int   cockpit_texture_seq = -1;     // Increment this each time we change aircraft or textures, so we can restart the network connection
 bool  cockpit_dirty = false;
 bool  cockpit_aircraft_known = false;
 char  cockpit_aircraft_name[256];
@@ -82,6 +82,8 @@ void detect_aircraft_filename(void) {
 }
 
 
+int network_started = false;
+
 static void find_last_match_in_texture(GLint start_texture_id)
 {
 	if (start_texture_id <= 0)
@@ -96,6 +98,13 @@ static void find_last_match_in_texture(GLint start_texture_id)
 		if ((tw == cockpit_texture_width) && (th == cockpit_texture_height) && (tf == cockpit_texture_format)) {
 			log_printf("Found texture id=%d, width=%d, height=%d, internal format == %d\n", i, tw, th, tf);
 			cockpit_texture_id = i;
+
+			if (!network_started) {
+				log_printf("Texture is found, starting network thread to listen for XTextureExtractor clients\n");
+				start_networking_thread();
+				network_started = true;
+			}
+
 			return;
 		}
 	}
@@ -166,9 +175,6 @@ PLUGIN_API int XPluginStart(
 #pragma message("DEBUG_KEYPRESS enabled")
 	XPLMRegisterHotKey(XPLM_VK_F8, xplm_DownFlag, "F9", process_debug_key, NULL);
 #endif
-
-	log_printf("Starting network thread to listen for XTextureExtractor clients\n");
-	start_networking_thread();
 
 	return 1;
 }
