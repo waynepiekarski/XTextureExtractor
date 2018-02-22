@@ -6,5 +6,6 @@
     <dimen name="about_text_padding">10dp</dimen>
     <dimen name="connect_text_size">15dp</dimen>
     <dimen name="connect_text_padding">2dp</dimen>
+    <dimen name="about_target_size">150dp</dimen>
 
 </resources>

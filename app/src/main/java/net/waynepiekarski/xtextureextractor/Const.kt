@@ -24,9 +24,9 @@ package net.waynepiekarski.xtextureextractor
 
 object Const {
     val TAG = "XTextureExtractor"
-    val TCP_PLUGIN_PORT = 51500
+    val TCP_PLUGIN_PORT = 52500
     val TCP_INTRO_HEADER = 4096
-    val TCP_PLUGIN_VERSION = "XTEv1"
+    val TCP_PLUGIN_VERSION = "XTEv2"
     val BECN_PORT = 49707
     val BECN_ADDRESS = "239.255.1.1"
 

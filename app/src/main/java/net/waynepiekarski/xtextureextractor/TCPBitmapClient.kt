@@ -40,7 +40,7 @@ class TCPBitmapClient (private var address: InetAddress, private var port: Int, 
     private lateinit var dataInputStream: DataInputStream
 
     interface OnTCPBitmapEvent {
-        fun onReceiveTCPBitmap(image: Bitmap, tcpRef: TCPBitmapClient)
+        fun onReceiveTCPBitmap(windowId: Int, image: Bitmap, tcpRef: TCPBitmapClient)
         fun onReceiveTCPHeader(header: ByteArray, tcpRef: TCPBitmapClient)
         fun onConnectTCP(tcpRef: TCPBitmapClient)
         fun onDisconnectTCP(reason: String?, tcpRef: TCPBitmapClient)
@@ -132,6 +132,24 @@ class TCPBitmapClient (private var address: InetAddress, private var port: Int, 
         // Start reading from the socket, any writes happen from another thread
         var reason: String? = null
         while (!cancelled) {
+            // Each window transmission starts with !_X_ where X is a binary byte 0x00 to 0xFF
+            var windowId: Int = -1
+            try {
+                val a = dataInputStream.readByte().toChar()
+                val b = dataInputStream.readByte().toChar()
+                windowId = dataInputStream.readByte().toInt()
+                val d = dataInputStream.readByte().toChar()
+                if ((a != '!') || (b != '_') || (d != '_')) {
+                    reason = "Image header invalid ![$a] _[$b] _[$d]"
+                    cancelled = true
+                    break
+                }
+            } catch (e: IOException) {
+                Log.d(Const.TAG, "Failed to receive window header, connection has failed")
+                cancelled = true
+            }
+
+            // Read the raw PNG data
             var bitmap: Bitmap? = null
             try {
                 bitmap = BitmapFactory.decodeStream(dataInputStream)
@@ -144,7 +162,7 @@ class TCPBitmapClient (private var address: InetAddress, private var port: Int, 
                 cancelled = true
                 reason = "Bitmap decode failure"
             } else {
-                MainActivity.doUiThread { callback.onReceiveTCPBitmap(bitmap, this) }
+                MainActivity.doUiThread { callback.onReceiveTCPBitmap(windowId, bitmap, this) }
             }
         }
 

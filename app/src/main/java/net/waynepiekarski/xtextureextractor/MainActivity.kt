@@ -40,6 +40,7 @@ import android.content.Context
 import android.os.*
 import android.text.InputType
 import android.view.SoundEffectConstants
+import android.widget.LinearLayout
 import java.io.BufferedReader
 import java.io.ByteArrayInputStream
 import java.io.IOException
@@ -62,6 +63,9 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
     private var lastLayoutTop    = -1
     private var lastLayoutRight  = -1
     private var lastLayoutBottom = -1
+    private var windowNames: ArrayList<String> = ArrayList(0)
+    private var window1Idx = -1
+    private var window2Idx = -1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         Log.d(Const.TAG, "onCreate()")
@@ -77,20 +81,15 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
         // Add the compiled-in BuildConfig values to the about text
         aboutText.text = aboutText.getText().toString().replace("__VERSION__", "Version: " + Const.getBuildVersion() + " " + BuildConfig.BUILD_TYPE + " build " + Const.getBuildId() + " " + "\nBuild date: " + Const.getBuildDateTime())
 
-        // Reset the text display to known 24 column text so the layout pass can work correctly
+        // Reset the display to an empty state with no images
         resetDisplay()
         Toast.makeText(this, R.string.help_text, Toast.LENGTH_LONG).show()
 
         // Miscellaneous counters that also need reset
         connectFailures = 0
 
-        textureImage.setOnTouchListener { _view, motionEvent ->
-            if (motionEvent.action == MotionEvent.ACTION_UP) {
-                // Compute touch location relative to the original image size
-                val ix = ((motionEvent.x * textureImage.getDrawable().intrinsicWidth) / textureImage.width).toInt()
-                val iy = ((motionEvent.y * textureImage.getDrawable().intrinsicHeight) / textureImage.height).toInt()
-                Log.d(Const.TAG, "ImageClick = ${ix},${iy}, RawClick = ${motionEvent.x},${motionEvent.y} from Image ${textureImage.getDrawable().intrinsicWidth},${textureImage.getDrawable().intrinsicHeight} -> ${textureImage.width},${textureImage.height}")
-
+        for (clickTarget in arrayOf(aboutTarget1, aboutTarget2, aboutTarget3, aboutTarget4)) {
+            clickTarget.setOnClickListener {
                 // Toggle the help text
                 if (aboutText.visibility == View.VISIBLE) {
                     aboutText.visibility = View.INVISIBLE
@@ -98,10 +97,33 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
                     aboutText.visibility = View.VISIBLE
                 }
             }
-            return@setOnTouchListener true
         }
 
-        connectText.setOnClickListener { popupManualHostname() }
+        textureImage1.setOnClickListener {
+            if (windowNames.size <= 0)
+                return@setOnClickListener
+            window1Idx++
+            if (window1Idx >= windowNames.size)
+                window1Idx = 0
+            Log.d(Const.TAG, "Changed window for texture 1 to $window1Idx=[${windowNames[window1Idx]}]")
+        }
+
+        textureImage2.setOnClickListener {
+            if (windowNames.size <= 0)
+                return@setOnClickListener
+            window2Idx++
+            if (window2Idx >= windowNames.size)
+                window2Idx = 0
+            Log.d(Const.TAG, "Changed window for texture 2 to $window2Idx=[${windowNames[window2Idx]}]")
+        }
+
+        connectText.setOnClickListener {
+            popupManualHostname()
+        }
+
+        aboutText.setOnClickListener {
+            aboutText.visibility = View.INVISIBLE
+        }
     }
 
     companion object {
@@ -128,7 +150,7 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
             }
             restartNetworking()
         } else {
-            Log.d(Const.TAG, "Setting override X-Plane hostname to $manualAddress")
+            Log.d(Const.TAG, "Setting override X-Plane hostname to $hostname")
             // Lookup the IP address on a background thread
             doBgThread {
                 try {
@@ -186,8 +208,14 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
     }
 
     override fun onConfigurationChanged(config: Configuration) {
-        Log.d(Const.TAG, "onConfigurationChanged ignored")
+        Log.d(Const.TAG, "onConfigurationChanged with layout change orientation=${config.orientation}")
         super.onConfigurationChanged(config)
+        if (config.orientation == Configuration.ORIENTATION_PORTRAIT)
+            textureLayout.setOrientation(LinearLayout.VERTICAL)
+        else if (config.orientation == Configuration.ORIENTATION_LANDSCAPE)
+            textureLayout.setOrientation(LinearLayout.HORIZONTAL)
+        else
+            Log.e(Const.TAG, "Unknown orientation value ${config.orientation}")
     }
 
     override fun onResume() {
@@ -203,6 +231,15 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
         val sharedPref = getPreferences(Context.MODE_PRIVATE)
         val prefAddress = sharedPref.getString("manual_address", "")
         Log.d(Const.TAG, "Found preferences value for manual_address = [$prefAddress]")
+
+        val ori = getResources().getConfiguration().orientation
+        Log.d(Const.TAG, "onResume detected orientation=$ori")
+        if (ori == Configuration.ORIENTATION_PORTRAIT)
+            textureLayout.setOrientation(LinearLayout.VERTICAL)
+        else if (ori == Configuration.ORIENTATION_LANDSCAPE)
+            textureLayout.setOrientation(LinearLayout.HORIZONTAL)
+        else
+            Log.e(Const.TAG, "Unknown orientation value $ori")
 
         // Pass on whatever this string is, and will end up calling restartNetworking()
         changeManualHostname(prefAddress)
@@ -224,7 +261,8 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
     }
 
     private fun resetDisplay() {
-        textureImage.setImageBitmap(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888))
+        textureImage1.setImageBitmap(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888))
+        textureImage2.setImageBitmap(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888))
     }
 
     private fun restartNetworking() {
@@ -331,7 +369,7 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
         restartNetworking()
     }
 
-    override fun onReceiveTCPBitmap(image: Bitmap, tcpRef: TCPBitmapClient) {
+    override fun onReceiveTCPBitmap(windowId: Int, image: Bitmap, tcpRef: TCPBitmapClient) {
         // If the current connection does not match the incoming reference, it is out of date and should be ignored.
         // This is important otherwise we will try to transmit on the wrong socket, fail, and then try to restart.
         if (tcpRef != tcp_extplane)
@@ -345,8 +383,11 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
         }
 
         // Store the image into the layout, which will resize it to fit the screen
-        // Log.d(Const.TAG, "TCP returned bitmap $image with ${image.width}x${image.height}")
-        textureImage.setImageBitmap(image)
+        // Log.d(Const.TAG, "TCP returned window $windowId bitmap $image with ${image.width}x${image.height}, win1=$window1Idx, win2=$window2Idx")
+        if (window1Idx == windowId)
+            textureImage1.setImageBitmap(image)
+        if (window2Idx == windowId)
+            textureImage2.setImageBitmap(image)
     }
 
     private fun networkingFatal(reason: String) {
@@ -367,12 +408,14 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
             val textureHeight = texture[1].toInt()
             Log.d(Const.TAG, "Plugin version [$version], aircraft [$aircraft], texture ${textureWidth}x${textureHeight}")
             var line: String?
+            windowNames.clear()
             while (true) {
                 line = bufferedReader.readLine()
                 if (line == null || line.contains("__EOF__"))
                     break
                 val window = line.split(' ')
                 val name = window[0]
+                windowNames.add(name)
                 val l = window[1].toInt()
                 val t = window[2].toInt()
                 val r = window[3].toInt()
@@ -383,6 +426,13 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
             if (version != Const.TCP_PLUGIN_VERSION) {
                 networkingFatal("Version [$version] is not expected [$Const.TCP_PLUGIN_VERSION]")
             }
+            if (windowNames.size <= 0) {
+                networkingFatal("No valid windows were sent")
+            }
+            window1Idx = 0
+            window2Idx = 0
+            if (windowNames.size > 1)
+                window2Idx = 1
         } catch (e: IOException) {
             Log.e(Const.TAG, "IOException processing header - $e")
             networkingFatal("Invalid header data")

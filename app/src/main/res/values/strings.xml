@@ -4,11 +4,12 @@
 
     <color name="about_text_background">#E0000000</color>
     <color name="about_text_color">#FFFFFF00</color>
+    <color name="about_target_background">#00000000</color>
 
     <color name="connect_text_background">#80404040</color>
     <color name="connect_text_color">#FF808080</color>
 
     <color name="app_background">#FF400000</color>
 
-    <string name="help_text">XTextureExtractor: Click the display to bring up help and usage information.\nClick the connection status to specify a manual hostname.</string>
+    <string name="help_text">XTextureExtractor\nClick the corners to bring up help and usage information.\nClick the connection status to specify a manual hostname.\nClick the instruments to cycle through each window view.</string>
 </resources>
