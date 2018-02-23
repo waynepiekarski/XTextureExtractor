@@ -153,8 +153,6 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 			}
 		}
 		else {
-			log_printf("Accepted new connection, will start transmitting images, texture seq is %d, total connections is %zu\n", cockpit_texture_seq, connections.size());
-
 			int iOptVal = TCP_SEND_BUFFER; // Make sure this is very large to prevent WSAEWOULDBLOCK=10035 when the network gets clogged up
 			int iOptLen = sizeof(int);
 			iResult = setsockopt(newClientSocket, SOL_SOCKET, SO_SNDBUF, (char *)&iOptVal, iOptLen);
@@ -175,7 +173,19 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 				WSACleanup();
 				return 1;
 			}
-			log_printf("New connection socket SO_SNDBUF is %d, should be %d\n", iOptVal, TCP_SEND_BUFFER);
+
+			u_long non_block = 0;
+			iResult = ioctlsocket(newClientSocket, FIONBIO, &non_block);
+			if (iResult == SOCKET_ERROR) {
+				log_printf("Fatal: failed to set blocking mode on socket: %d\n", WSAGetLastError());
+				closesocket(newClientSocket);
+				for (auto s : connections)
+					closesocket(s);
+				WSACleanup();
+				return 1;
+			}
+
+			log_printf("Accepted new connection, texture seq is %d, total connections is %zu, SO_SNDBUF is %d from %d\n", cockpit_texture_seq, connections.size(), iOptVal, TCP_SEND_BUFFER);
 
 			iSendResult = send(newClientSocket, header, TCP_INTRO_HEADER, 0);
 			if (iSendResult == SOCKET_ERROR) {
@@ -190,7 +200,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 				return 1;
 			}
 			else {
-				log_printf("Successfully sent header of %d bytes\n", TCP_INTRO_HEADER);
+				// log_printf("Successfully sent header of %d bytes\n", TCP_INTRO_HEADER);
 				connections.push_back(newClientSocket);
 			}
 		}
@@ -198,11 +208,10 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 		std::vector<unsigned char> png_data;
 
 		if (last_cockpit_texture_seq != cockpit_texture_seq) {
-			log_printf("Texture sequence number has increased from %d to %d, so restarting all connections\n", last_cockpit_texture_seq, cockpit_texture_seq);
+			log_printf("Network: Texture sequence number has increased from %d to %d, so closing all connections to force restart\n", last_cockpit_texture_seq, cockpit_texture_seq);
 			for (auto s : connections)
 				closesocket(s);
 			recompute_header();
-			break; // Exit the loop
 		}
 		last_cockpit_texture_seq = cockpit_texture_seq;
 
