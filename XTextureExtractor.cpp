@@ -476,17 +476,17 @@ void load_window_state() {
 	detect_aircraft_filename();
 
 	// Read in the new aircraft configuration file
+	cockpit_window_limit = 0;
+	cockpit_aircraft_known = false;
 	char texturefile[256];
 	sprintf(texturefile, "%s\\%s.tex", plugin_path, cockpit_aircraft_filename);
 	FILE *fp = fopen(texturefile, "rb");
 	if (fp == NULL) {
-		log_printf("Could not load texture data from file %s\n", texturefile);
+		log_printf("Could not load texture data from file %s, this aircraft is unknown\n", texturefile);
 		return;
 	} else {
 		log_printf("Loading XTextureExtractor state from %s\n", texturefile);
 	}
-	cockpit_window_limit = 0;
-	cockpit_aircraft_known = false;
 	if (fscanf(fp, "%s %d %d %d", cockpit_aircraft_name, &cockpit_texture_width, &cockpit_texture_height, &cockpit_texture_format) != 4) {
 		log_printf("Failed to read texture description from file, aborting reading\n");
 		fclose(fp);
