@@ -211,6 +211,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 			log_printf("Network: Texture sequence number has increased from %d to %d, so closing all connections to force restart\n", last_cockpit_texture_seq, cockpit_texture_seq);
 			for (auto s : connections)
 				closesocket(s);
+			connections.clear();
 			recompute_header();
 		}
 		last_cockpit_texture_seq = cockpit_texture_seq;
