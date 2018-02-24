@@ -173,7 +173,7 @@ PLUGIN_API int XPluginStart(
 	// Implement a debugging key if we need it
 #ifdef DEBUG_KEYPRESS
 #pragma message("DEBUG_KEYPRESS enabled")
-	XPLMRegisterHotKey(XPLM_VK_F8, xplm_DownFlag, "F9", process_debug_key, NULL);
+	XPLMRegisterHotKey(XPLM_VK_F8, xplm_DownFlag, "F8", process_debug_key, NULL);
 #endif
 
 	return 1;
