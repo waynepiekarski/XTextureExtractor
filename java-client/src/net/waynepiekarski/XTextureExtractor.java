@@ -1,3 +1,25 @@
+// ---------------------------------------------------------------------
+//
+// XTextureExtractor
+//
+// Copyright (C) 2018 Wayne Piekarski
+// wayne@tinmith.net http://tinmith.net/wayne
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+//
+// ---------------------------------------------------------------------
+
 package net.waynepiekarski;
 
 import javax.imageio.ImageIO;
@@ -5,6 +27,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -26,6 +49,7 @@ public class XTextureExtractor extends JFrame {
     ArrayList<String> windowNames = new ArrayList<String>();
 
     public XTextureExtractor(String hostname) {
+        mFrame = this;
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setTitle("XTextureExtractor");
 
@@ -33,12 +57,11 @@ public class XTextureExtractor extends JFrame {
             setExtendedState(JFrame.MAXIMIZED_BOTH);
             setUndecorated(true);
             setVisible(true);
+            System.err.println("Fullscreen frame is " + mFrame.getWidth() + "x" + mFrame.getHeight());
         }
 
         mLabel = new JLabel();
         add(mLabel, BorderLayout.CENTER);
-        pack();
-        mFrame = this;
 
         mLabel.addMouseListener(new MouseAdapter()
         {
@@ -139,19 +162,24 @@ public class XTextureExtractor extends JFrame {
             // Each window transmission starts with !_X_ where X is a binary byte 0x00 to 0xFF
             int windowId = -1;
             try {
-                // We end up with some remaining PNG data that we need to eat up
+                // We sometimes end up with PNG data, run a sliding window until we find the next header
                 char a = 0x00;
-                while (a != '!') {
-                    a = (char) dataInputStream.readByte();
-                    // System.err.println("Eating up extra PNG ending " + (((int)a) & 0xFF));
+		char b = 0x00;
+		char c = 0x00;
+		char d = 0x00;
+                int safety = 1000; // If we have to skip > 1000 bytes there is probably a protocol error
+                while (!(a == '!' && (b == '_') && (d == '_'))) {
+                    a = b;
+                    b = c;
+                    c = d;
+                    d = (char) dataInputStream.readByte();
+                    safety--;
+                    if (safety == 0) {
+                        System.err.println("Image header invalid, could not resync stream");
+                        System.exit(1);
+                    }
                 }
-                char b = (char) dataInputStream.readByte();
-                windowId = (int) dataInputStream.readByte();
-                char d = (char) dataInputStream.readByte();
-                if ((a != '!') || (b != '_') || (d != '_')) {
-                    System.err.println("Image header invalid ![" + (((int) a) & 0xFF) + "d/" + a + "] _[" + (byte) b + "d/" + b + "] _[" + (byte) d + "d/" + d + "]");
-                    break;
-                }
+                windowId = (int) c;
             } catch (IOException e) {
                 System.err.println("Failed to receive window header, connection has failed");
                 break;
@@ -159,13 +187,23 @@ public class XTextureExtractor extends JFrame {
 
             try {
                 // Read the raw PNG data and put it in the window if it is a match
-                Image image = ImageIO.read(dataInputStream);
+                BufferedImage _image = ImageIO.read(dataInputStream);
+                int iw = _image.getWidth();
+                int ih = _image.getHeight();
+                Image image = _image;
                 if (windowId == windowActive) {
                     // System.err.println("Storing image " + windowId);
 
                     // If the window has been laid out once, then resize the image to fit this
                     if (windowPacked || windowFullscreen) {
-                        image = image.getScaledInstance(label.getWidth(), label.getHeight(), Image.SCALE_SMOOTH);
+                        int lw = label.getWidth();
+                        int lh = label.getHeight();
+                        if ((lw <= 1) || (lh <= 1)) {
+                            lw = iw;
+                            lh = ih;
+                            System.err.println("Fixing up empty image to size " + lw + "x" + lh);
+                        }
+                        image = image.getScaledInstance(lw, lh, Image.SCALE_SMOOTH);
                     }
 
                     // Store the image into an icon for display
