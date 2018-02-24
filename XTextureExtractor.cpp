@@ -128,10 +128,13 @@ static int _g_scan_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, 
 static int _g_load_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_save_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_clear_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
+static int _g_hide_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_dump_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 
 char _g_window_name[COCKPIT_MAX_WINDOWS][256];  // titles of each window
 int _g_texture_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
+
+bool decorateWindows = true;
 
 static int	coord_in_rect(int x, int y, int * bounds_lbrt)  { return ((x >= bounds_lbrt[0]) && (x < bounds_lbrt[2]) && (y < bounds_lbrt[3]) && (y >= bounds_lbrt[1])); }
 
@@ -329,9 +332,11 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 	int *g_save_button_lbrt = &_g_save_button_lbrt[win_num][0];
 	int *g_load_button_lbrt = &_g_load_button_lbrt[win_num][0];
 	int *g_clear_button_lbrt = &_g_clear_button_lbrt[win_num][0];
+	int *g_hide_button_lbrt = &_g_hide_button_lbrt[win_num][0];
 	int *g_dump_button_lbrt = &_g_dump_button_lbrt[win_num][0];
 
 	// Draw our buttons
+	if (decorateWindows)
 	{
 		// Position the pop-in/pop-out button in the upper left of the window
 		g_pop_button_lbrt[0] = l + 0;
@@ -349,7 +354,8 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		DEFINE_BOX(g_load_button_lbrt, g_scan_button_lbrt, "Ld");
 		DEFINE_BOX(g_save_button_lbrt, g_load_button_lbrt, cockpit_save_string);
 		DEFINE_BOX(g_clear_button_lbrt, g_save_button_lbrt, "Clr");
-		DEFINE_BOX(g_dump_button_lbrt, g_clear_button_lbrt, "Dbg");
+		DEFINE_BOX(g_hide_button_lbrt, g_clear_button_lbrt, "H");
+		DEFINE_BOX(g_dump_button_lbrt, g_hide_button_lbrt, "Dbg");
 #undef DEFINE_BOX
 
 		// Draw the boxes around our rudimentary buttons
@@ -362,6 +368,7 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		DRAW_BOX(g_load_button_lbrt);
 		DRAW_BOX(g_save_button_lbrt);
 		DRAW_BOX(g_clear_button_lbrt);
+		DRAW_BOX(g_hide_button_lbrt);
 		DRAW_BOX(g_dump_button_lbrt);
 #undef DRAW_BOX
 
@@ -376,6 +383,7 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		XPLMDrawString(col_white, g_load_button_lbrt[0],  g_load_button_lbrt[1]  + 4, (char *)"Ld", NULL, xplmFont_Proportional);
 		XPLMDrawString(col_white, g_save_button_lbrt[0],  g_save_button_lbrt[1]  + 4, (char *)cockpit_save_string, NULL, xplmFont_Proportional);
 		XPLMDrawString(col_white, g_clear_button_lbrt[0], g_clear_button_lbrt[1] + 4, (char *)"Clr", NULL, xplmFont_Proportional);
+		XPLMDrawString(col_white, g_hide_button_lbrt[0],  g_hide_button_lbrt[1] + 4, (char *)"H", NULL, xplmFont_Proportional);
 		XPLMDrawString(col_white, g_dump_button_lbrt[0],  g_dump_button_lbrt[1]  + 4, (char *)"Dbg", NULL, xplmFont_Proportional);
 	}
 
@@ -396,12 +404,17 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		cockpit_dirty = false;
 	}
 
-	const int topInset = 20;
 	int *g_texture_lbrt = &_g_texture_lbrt[win_num][0];
+	int topInset = 20;
+	int sideInset = 0;
+	if (!decorateWindows) {
+		topInset = -40;
+		sideInset = 10;
+	}
 
 	if (cockpit_aircraft_known) {
 		// Draw the texture to the window
-		draw_texture_rect(g_texture_lbrt[0], g_texture_lbrt[1], g_texture_lbrt[2], g_texture_lbrt[3], cockpit_texture_width, cockpit_texture_height, l, t - topInset, r, b);
+		draw_texture_rect(g_texture_lbrt[0], g_texture_lbrt[1], g_texture_lbrt[2], g_texture_lbrt[3], cockpit_texture_width, cockpit_texture_height, l - sideInset, t - topInset, r + sideInset, b - sideInset);
 
 		// Check to see if we need to prepare a new texture image to send, only capture a new one if the previous has been consumed
 		if (texture_pointer == NULL) {
@@ -527,7 +540,7 @@ void load_window_state() {
 	params.handleCursorFunc = dummy_cursor_status_handler;
 	params.refcon = NULL;
 	params.layer = xplm_WindowLayerFloatingWindows;
-	params.decorateAsFloatingWindow = 1;
+	params.decorateAsFloatingWindow = decorateWindows;
 
 	// Open windows in reverse order so the most important are at the top
 	for (intptr_t i = cockpit_window_limit - 1; i >= 0; i--) {
@@ -583,7 +596,8 @@ int	handle_mouse(XPLMWindowID in_window_id, int x, int y, XPLMMouseStatus is_dow
 		{
 			XPLMBringWindowToFront(in_window_id);
 		}
-		else if(coord_in_rect(x, y, _g_pop_button_lbrt[win_num])) // user clicked the pop-in/pop-out button
+
+		if(coord_in_rect(x, y, _g_pop_button_lbrt[win_num])) // user clicked the pop-in/pop-out button
 		{
 			XPLMSetWindowPositioningMode(in_window_id, is_popped_out ? xplm_WindowPositionFree : xplm_WindowPopOut, 0);
 		}
@@ -605,11 +619,21 @@ int	handle_mouse(XPLMWindowID in_window_id, int x, int y, XPLMMouseStatus is_dow
 		else if (coord_in_rect(x, y, _g_clear_button_lbrt[win_num])) {
 			clear_window_state();
 		}
+		else if (coord_in_rect(x, y, _g_hide_button_lbrt[win_num])) {
+			decorateWindows = !decorateWindows;
+			log_printf("Inverting window decorations to %d\n", decorateWindows);
+			load_window_state();
+		}
 		else if (coord_in_rect(x, y, _g_dump_button_lbrt[win_num])) {
 			dump_debug();
 		}
 		else {
-			// log_printf("Ignored unknown click\n");
+			// Make the whole window clickable if the buttons are hidden
+			if (!decorateWindows) {
+				decorateWindows = !decorateWindows;
+				log_printf("Inverting window decorations to %d\n", decorateWindows);
+				load_window_state();
+			}
 		}
 	}
 	return 1;
