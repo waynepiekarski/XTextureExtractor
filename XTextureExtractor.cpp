@@ -233,10 +233,23 @@ void save_png(GLint texId)
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &tw);
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &th);
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &tf);
-	
+
 	// Read the entire texture into a buffer
 	unsigned char * pixels = new unsigned char[tw * th * 4];
 	glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+
+	// Flip the texture so it is upright when we write to the PNG file
+	unsigned char * flipped = new unsigned char[tw * th * 4];
+	int in_stride = tw * 4;
+	int out_stride = tw * 4;
+	int out_rows = th;
+	unsigned char *src = pixels + ((th - 1) * in_stride);
+	unsigned char *dest = flipped;
+	for (int r = 0; r < out_rows; r++) {
+		memcpy(dest, src, out_stride);
+		src -= in_stride;
+		dest += out_stride;
+	}
 
 	// Write out the RGBA image as an RGB image with lodepng
 	std::vector<unsigned char> png;
@@ -246,19 +259,24 @@ void save_png(GLint texId)
 	state.info_png.color.colortype = LCT_RGB; // Output type
 	state.info_png.color.bitdepth = 8;
 	state.encoder.auto_convert = 0; // Must provide this or will ignore the input/output types
-	unsigned error = lodepng::encode(png, pixels, tw, th, state);
+	unsigned error = lodepng::encode(png, flipped, tw, th, state);
 
 	FILE *fp = fopen("texture_save.png", "wb");
 	if (fp == NULL) {
 		log_printf("Could not save to file\n");
 		delete[] pixels;
+		delete[] flipped;
 		return;
 	}
 	fwrite(png.data(), sizeof(unsigned char), png.size(), fp);
-	fclose(fp);
-
 	delete[] pixels;
-	log_printf("PNG save is complete to file texture_save.png in X-Plane main directory\n");
+	delete[] flipped;
+	if (fclose(fp) == 0) {
+		log_printf("PNG save of %zu bytes is complete to file texture_save.png in X-Plane main directory\n", png.size());
+	}
+	else {
+		log_printf("Failed to save PNG file\n");
+	}
 }
 
 void dump_debug()
