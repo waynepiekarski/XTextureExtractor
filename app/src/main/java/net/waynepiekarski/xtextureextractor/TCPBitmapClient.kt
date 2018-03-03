@@ -44,6 +44,8 @@ class TCPBitmapClient (private var address: InetAddress, private var port: Int, 
         fun onReceiveTCPHeader(header: ByteArray, tcpRef: TCPBitmapClient)
         fun onConnectTCP(tcpRef: TCPBitmapClient)
         fun onDisconnectTCP(reason: String?, tcpRef: TCPBitmapClient)
+        fun getWindow1Index(): Int
+        fun getWindow2Index(): Int
     }
 
     fun stopListener() {
@@ -132,37 +134,83 @@ class TCPBitmapClient (private var address: InetAddress, private var port: Int, 
         // Start reading from the socket, any writes happen from another thread
         var reason: String? = null
         while (!cancelled) {
-            // Each window transmission starts with !_X_ where X is a binary byte 0x00 to 0xFF
+            // Each window transmission starts with !_____X_ where X is a binary byte 0x00 to 0xFF
             var windowId: Int = -1
+            var expectedBytes: Int = -1
             try {
                 val a = dataInputStream.readByte().toChar()
                 val b = dataInputStream.readByte().toChar()
-                windowId = dataInputStream.readByte().toInt()
+                val c = dataInputStream.readByte().toChar()
                 val d = dataInputStream.readByte().toChar()
-                if ((a != '!') || (b != '_') || (d != '_')) {
-                    reason = "Image header invalid ![$a] _[$b] _[$d]"
+                val e = dataInputStream.readByte().toChar()
+                val f = dataInputStream.readByte().toChar()
+                windowId = dataInputStream.readByte().toInt()
+                val h = dataInputStream.readByte().toChar()
+                if ((a != '!') || (b != '_') || (c != '_') || (d != '_') || (e != '_') || (f != '_') || (h != '_')) {
+                    reason = "Image header invalid ![$a] _[$b] _[$c] _[$d] _[$e] _[$f] W[$windowId] _[$h]"
+                    cancelled = true
+                    break
+                }
+                // Read the number of upcoming PNG bytes
+                val b0 = dataInputStream.readByte().toInt() and 0xFF
+                val b1 = dataInputStream.readByte().toInt() and 0xFF
+                val b2 = dataInputStream.readByte().toInt() and 0xFF
+                val b3 = dataInputStream.readByte().toInt() and 0xFF
+                expectedBytes = (((((b3 * 256) + b2) * 256) + b1) * 256) + b0
+                // Log.d(Const.TAG, "Found header for window $windowId with $expectedBytes bytes of PNG data (lsb)b0=$b0, b1=$b1, b2=$b2, (msb)b3=$b3")
+
+                val w = dataInputStream.readByte().toChar()
+                val x = dataInputStream.readByte().toChar()
+                val y = dataInputStream.readByte().toChar()
+                val z = dataInputStream.readByte().toChar()
+                if ((w != '_') || (x != '_') || (y != '_') || (z != '_')) {
+                    reason = "Image second header invalid _[$w] _[$x] _[$y] _[$z]"
                     cancelled = true
                     break
                 }
             } catch (e: IOException) {
                 Log.d(Const.TAG, "Failed to receive window header, connection has failed")
                 cancelled = true
+                break
             }
 
-            // Read the raw PNG data
-            var bitmap: Bitmap? = null
-            try {
-                bitmap = BitmapFactory.decodeStream(dataInputStream)
-            } catch (e: IOException) {
-                Log.d(Const.TAG, "Exception during socket bitmap decode $e")
-                bitmap = null
-            }
-            if (bitmap == null) {
-                Log.d(Const.TAG, "Bitmap decode returned null, connection has failed")
-                cancelled = true
-                reason = "Bitmap decode failure"
+            if ((windowId == callback.getWindow1Index()) || (windowId == callback.getWindow2Index())) {
+                // Read the raw PNG data and decode it
+                var bitmap: Bitmap?
+                try {
+                    bitmap = BitmapFactory.decodeStream(dataInputStream)
+                } catch (e: IOException) {
+                    Log.d(Const.TAG, "Exception during socket bitmap decode $e")
+                    bitmap = null
+                }
+                if (bitmap == null) {
+                    Log.d(Const.TAG, "Bitmap decode returned null, connection has failed")
+                    cancelled = true
+                    reason = "Bitmap decode failure"
+                    break
+                } else {
+                    MainActivity.doUiThread { callback.onReceiveTCPBitmap(windowId, bitmap, this) }
+                }
             } else {
-                MainActivity.doUiThread { callback.onReceiveTCPBitmap(windowId, bitmap, this) }
+                // Read up the PNG data and ignore it
+                try {
+                    dataInputStream.skipBytes(expectedBytes)
+                } catch (e: IOException) {
+                    Log.d(Const.TAG, "Failure during skipping PNG receive, connection has failed")
+                    cancelled = true
+                    break
+                }
+            }
+
+            // Read the ending padding nulls to 1024 bytes
+            try {
+                val skip = 1024 - (expectedBytes % 1024)
+                // Log.d(Const.TAG, "Skipping $skip bytes to pad to 1024 bytes")
+                dataInputStream.skipBytes(skip)
+            } catch (e: IOException) {
+                Log.d(Const.TAG, "Failure during padding receive, connection has failed")
+                cancelled = true
+                break
             }
         }
 

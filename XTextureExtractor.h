@@ -53,7 +53,7 @@ static char __log_printf_buffer[4096];
 #define MAX_TEXTURE_WIDTH  2048
 #define MAX_TEXTURE_HEIGHT 2048
 #define TCP_INTRO_HEADER   4096
-#define TCP_PLUGIN_VERSION "XTEv2"
+#define TCP_PLUGIN_VERSION "XTEv3"
 #define TCP_SEND_BUFFER    10*1024*1024
 
 extern void start_networking_thread(void);

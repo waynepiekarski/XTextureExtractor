@@ -38,7 +38,7 @@ public class XTextureExtractor extends JFrame {
 
     static final int TCP_PORT = 52500;
     static final int TCP_INTRO_HEADER = 4096;
-    static final String TCP_PLUGIN_VERSION = "XTEv2";
+    static final String TCP_PLUGIN_VERSION = "XTEv3";
 
     public JLabel mLabel;
     public JFrame mFrame;
@@ -159,39 +159,61 @@ public class XTextureExtractor extends JFrame {
         }
 
         while (!cancelled) {
-            // Each window transmission starts with !_X_ where X is a binary byte 0x00 to 0xFF
+            // Each window transmission starts with !_____X_ where X is a binary byte 0x00 to 0xFF
             int windowId = -1;
+            int expectedBytes = -1;
             try {
                 // We sometimes end up with PNG data, run a sliding window until we find the next header
-                char a = 0x00;
-		char b = 0x00;
-		char c = 0x00;
-		char d = 0x00;
-                int safety = 1000; // If we have to skip > 1000 bytes there is probably a protocol error
-                while (!(a == '!' && (b == '_') && (d == '_'))) {
-                    a = b;
-                    b = c;
-                    c = d;
-                    d = (char) dataInputStream.readByte();
-                    safety--;
-                    if (safety == 0) {
-                        System.err.println("Image header invalid, could not resync stream");
-                        System.exit(1);
-                    }
+                char a = (char)dataInputStream.readByte();
+                char b = (char)dataInputStream.readByte();
+                char c = (char)dataInputStream.readByte();
+                char d = (char)dataInputStream.readByte();
+                char e = (char)dataInputStream.readByte();
+                char f = (char)dataInputStream.readByte();
+                char g = (char)dataInputStream.readByte();
+                char h = (char)dataInputStream.readByte();
+                if ((a != '!') || (b != '_') || (c != '_') || (d != '_') || (e != '_') || (f != '_') || (h != '_')) {
+                    System.err.println("Image header invalid ![" + a + "] _[" + b + "] _[" + c + "] _[" + d + "] _[" + e + "] _[" + f + "] W[" + windowId + "] _[" + h + "]");
+                    System.exit(1);
                 }
-                windowId = (int) c;
+                windowId = (int) g;
+
+                // Read the number of upcoming PNG bytes
+                int b0 = (int)(dataInputStream.readByte()) & 0xFF;
+                int b1 = (int)(dataInputStream.readByte()) & 0xFF;
+                int b2 = (int)(dataInputStream.readByte()) & 0xFF;
+                int b3 = (int)(dataInputStream.readByte()) & 0xFF;
+                expectedBytes = (((((b3 * 256) + b2) * 256) + b1) * 256) + b0;
+
+                char w = (char)dataInputStream.readByte();
+                char x = (char)dataInputStream.readByte();
+                char y = (char)dataInputStream.readByte();
+                char z = (char)dataInputStream.readByte();
+                if ((w != '_') || (x != '_') || (y != '_') || (z != '_')) {
+                    System.err.println("Image second header invalid _[" + w + "] _[" + x + "] _[" + y + "] _[" + z + "]");
+                    System.exit(1);
+                }
             } catch (IOException e) {
                 System.err.println("Failed to receive window header, connection has failed");
                 break;
             }
 
             try {
-                // Read the raw PNG data and put it in the window if it is a match
-                BufferedImage _image = ImageIO.read(dataInputStream);
-                int iw = _image.getWidth();
-                int ih = _image.getHeight();
-                Image image = _image;
-                if (windowId == windowActive) {
+                if (windowId != windowActive) {
+                    // Skip the PNG data if the window is not active
+                    dataInputStream.skipBytes(expectedBytes);
+                } else {
+                    // Read the expected PNG data into a buffer
+                    byte[] pngData = new byte[expectedBytes];
+                    dataInputStream.readFully(pngData);
+                    ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(pngData);
+
+                    // Read the raw PNG data and put it in the window if it is a match
+                    BufferedImage _image = ImageIO.read(byteArrayInputStream);
+                    int iw = _image.getWidth();
+                    int ih = _image.getHeight();
+                    Image image = _image;
+
                     // System.err.println("Storing image " + windowId);
 
                     // If the window has been laid out once, then resize the image to fit this
@@ -216,8 +238,16 @@ public class XTextureExtractor extends JFrame {
                         mFrame.pack();
                         windowPacked = true;
                     }
-                } else {
-                    // System.err.println("Ignoring image " + windowId);
+                }
+
+                // Read the ending padding nulls to 1024 bytes
+                try {
+                    int skip = 1024 - (expectedBytes % 1024);
+                    // Log.d(Const.TAG, "Skipping " + skip + " bytes to pad to 1024 bytes");
+                    dataInputStream.skipBytes(skip);
+                } catch (IOException e) {
+                    System.err.println("Failure during padding receive, connection has failed");
+                    System.exit(1);
                 }
             } catch (IOException e) {
                 System.err.println("Failed to read and decode image");

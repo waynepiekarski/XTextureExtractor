@@ -205,6 +205,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 			}
 		}
 
+		std::vector<unsigned char> out_data;
 		std::vector<unsigned char> png_data;
 
 		if (last_cockpit_texture_seq != cockpit_texture_seq) {
@@ -239,16 +240,10 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 		*/
 
 		// Reset the output buffer
-		png_data.clear();
+		out_data.clear();
 
 		// Encode each window in the texture as a separate image
 		for (int i = 0; i < cockpit_window_limit; i++) {
-
-			// Write the window id to the start, pad to 4 bytes
-			png_data.insert(png_data.end(), '!');
-			png_data.insert(png_data.end(), '_');
-			png_data.insert(png_data.end(), (unsigned char)i);
-			png_data.insert(png_data.end(), '_');
 
 			// Compute sub-image dimensions
 			int x1 = _g_texture_lbrt[i][0]; // L
@@ -272,7 +267,8 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 				dest += out_stride;
 			}
 
-			// Write out the RGBA image as an RGB image with lodepng
+			// Compress the RGBA image as an RGB image with lodepng
+			png_data.clear();
 			lodepng::State state;
 			state.info_raw.colortype = LCT_RGBA; // Input type
 			state.info_raw.bitdepth = 8;
@@ -280,6 +276,31 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 			state.info_png.color.bitdepth = 8;
 			state.encoder.auto_convert = 0; // Must provide this or will ignore the input/output types
 			unsigned error = lodepng::encode(png_data, &sub_buffer[0], x2 - x1, -(y2 - y1), state);
+
+			// 7 char header and 1 byte for the window id (8 bytes total)
+			out_data.insert(out_data.end(), '!');
+			for (int ch = 0; ch < 5; ch++)
+				out_data.insert(out_data.end(), '_');
+			out_data.insert(out_data.end(), (unsigned char)i);
+			out_data.insert(out_data.end(), '_');
+
+			// 4 bytes for the number of bytes of PNG data so we can easily skip it if necessary
+			unsigned int num_png_bytes = (unsigned int)png_data.size();
+			for (int ch = 0; ch < 4; ch++) {
+				out_data.insert(out_data.end(), *(((unsigned char *)&num_png_bytes)+ch));
+			}
+
+			// Pad the header out with another 4 bytes of nothing
+			for (int ch = 0; ch < 4; ch++)
+				out_data.insert(out_data.end(), '_');
+
+			// We have written out 16 bytes of header, now write out the PNG data
+			out_data.insert(out_data.end(), png_data.begin(), png_data.end());
+
+			// Add null bytes to the end to pad the PNG data out to 1024 byte blocks
+			int pad = 1024 - png_data.size() % 1024;
+			for (int ch = 0; ch < pad; ch++)
+				out_data.insert(out_data.end(), 0x00);
 		}
 
 		// Now that the image is compressed, we can throw away the texture capture and tell the main thread to start capturing a new one immediately
@@ -288,14 +309,14 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 		// Send the compressed data to the socket
 		for (auto s = connections.begin(); s != connections.end(); ) {
 			// log_printf("Sending PNG data to socket %zu\n", *s);
-			iSendResult = send(*s, (const char *)png_data.data(), (int)png_data.size(), 0);
+			iSendResult = send(*s, (const char *)out_data.data(), (int)out_data.size(), 0);
 			if (iSendResult == SOCKET_ERROR) {
-				log_printf("Connection closed: TCP PNG send of %zu bytes failed with code %d\n", png_data.size(), WSAGetLastError());
+				log_printf("Connection closed: TCP PNG send of %zu bytes failed with code %d\n", out_data.size(), WSAGetLastError());
 				closesocket(*s);
 				s = connections.erase(s); // Increment iterator
 			}
-			else if (iSendResult != png_data.size()) {
-				log_printf("Fatal: TCP transmission was %d bytes but expected to send %zu bytes\n", iSendResult, png_data.size());
+			else if (iSendResult != out_data.size()) {
+				log_printf("Fatal: TCP transmission was %d bytes but expected to send %zu bytes\n", iSendResult, out_data.size());
 				for (auto s : connections)
 					closesocket(s);
 				WSACleanup();

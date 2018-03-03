@@ -25,12 +25,8 @@ package net.waynepiekarski.xtextureextractor
 import android.app.Activity
 import android.content.res.Configuration
 import android.graphics.*
-import android.graphics.drawable.BitmapDrawable
-import android.util.Base64
 import android.util.Log
-import android.view.MotionEvent
 import android.view.View
-import android.widget.RelativeLayout
 import android.widget.Toast
 import kotlinx.android.synthetic.main.activity_main.*
 import java.net.InetAddress
@@ -39,7 +35,6 @@ import android.app.AlertDialog
 import android.content.Context
 import android.os.*
 import android.text.InputType
-import android.view.SoundEffectConstants
 import android.widget.LinearLayout
 import java.io.BufferedReader
 import java.io.ByteArrayInputStream
@@ -105,6 +100,11 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
             window1Idx++
             if (window1Idx >= windowNames.size)
                 window1Idx = 0
+            val sharedPref = getPreferences(Context.MODE_PRIVATE)
+            with(sharedPref.edit()){
+                putInt("window_1_idx", window1Idx)
+                commit()
+            }
             Log.d(Const.TAG, "Changed window for texture 1 to $window1Idx=[${windowNames[window1Idx]}]")
         }
 
@@ -114,6 +114,11 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
             window2Idx++
             if (window2Idx >= windowNames.size)
                 window2Idx = 0
+            val sharedPref = getPreferences(Context.MODE_PRIVATE)
+            with(sharedPref.edit()){
+                putInt("window_2_idx", window2Idx)
+                commit()
+            }
             Log.d(Const.TAG, "Changed window for texture 2 to $window2Idx=[${windowNames[window2Idx]}]")
         }
 
@@ -137,6 +142,9 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
             Handler(backgroundThread!!.getLooper()).post { code() }
         }
     }
+
+    override fun getWindow1Index(): Int { return window1Idx }
+    override fun getWindow2Index(): Int { return window2Idx }
 
     // The user can click on the connectText and specify a X-Plane hostname manually
     private fun changeManualHostname(hostname: String) {
@@ -230,6 +238,8 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
         // Retrieve the manual address from shared preferences
         val sharedPref = getPreferences(Context.MODE_PRIVATE)
         val prefAddress = sharedPref.getString("manual_address", "")
+        window1Idx = sharedPref.getInt("window_1_idx", 0)
+        window2Idx = sharedPref.getInt("window_2_idx", 1)
         Log.d(Const.TAG, "Found preferences value for manual_address = [$prefAddress]")
 
         val ori = getResources().getConfiguration().orientation
@@ -429,10 +439,21 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
             if (windowNames.size <= 0) {
                 networkingFatal("No valid windows were sent")
             }
-            window1Idx = 0
-            window2Idx = 0
-            if (windowNames.size > 1)
-                window2Idx = 1
+            if (window1Idx >= windowNames.size) {
+                window1Idx = 0
+            }
+            if (window2Idx >= windowNames.size) {
+                if (windowNames.size > 1)
+                    window2Idx = 1
+                else
+                    window2Idx = 0
+            }
+            val sharedPref = getPreferences(Context.MODE_PRIVATE)
+            with(sharedPref.edit()){
+                putInt("window_1_idx", window1Idx)
+                putInt("window_2_idx", window2Idx)
+                commit()
+            }
         } catch (e: IOException) {
             Log.e(Const.TAG, "IOException processing header - $e")
             networkingFatal("Invalid header data")

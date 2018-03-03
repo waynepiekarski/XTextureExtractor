@@ -11,5 +11,5 @@
 
     <color name="app_background">#FF400000</color>
 
-    <string name="help_text">XTextureExtractor\nClick the corners to bring up help and usage information.\nClick the connection status to specify a manual hostname.\nClick the instruments to cycle through each window view.</string>
+    <string name="help_text">XTextureExtractor - TCP port 52500\nClick the corners to bring up help and usage information.\nClick the connection status to specify a manual hostname.\nClick the instruments to cycle through each window view.</string>
 </resources>
