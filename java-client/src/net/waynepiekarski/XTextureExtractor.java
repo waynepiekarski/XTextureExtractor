@@ -48,6 +48,9 @@ public class XTextureExtractor extends JFrame {
     Boolean windowPacked = false;
     ArrayList<String> windowNames = new ArrayList<String>();
 
+    byte[] newPngData = null;
+    Object newPngDataSync = new Object();
+
     public XTextureExtractor(String hostname) {
         mFrame = this;
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -75,16 +78,78 @@ public class XTextureExtractor extends JFrame {
             }
         });
 
-        Thread thread = new Thread(new Runnable() {
+        new Thread(new Runnable() {
             @Override
             public void run() {
-                networkLoop(hostname, mLabel);
+                networkLoop(hostname);
             }
-        });
-        thread.start();
+        }).start();
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                displayLoop(mLabel);
+            }
+        }).start();
     }
 
-    public void networkLoop(String hostname, JLabel label) {
+    public void displayLoop(JLabel label) {
+        synchronized(newPngDataSync) {
+            while(true) {
+                try {
+                    while(newPngData == null)
+                        newPngDataSync.wait();
+                } catch (InterruptedException e) {
+                    System.err.println("wait() call failed - " + e);
+                    System.exit(1);
+                }
+
+                ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(newPngData);
+
+                // Read the raw PNG data and put it in the window if it is a match
+                BufferedImage _image = null;
+                try {
+                    _image = ImageIO.read(byteArrayInputStream);
+                } catch (IOException e) {
+                    System.err.println("Failed to decode image - " + e);
+                    System.exit(1);
+                }
+                int iw = _image.getWidth();
+                int ih = _image.getHeight();
+                Image image = _image;
+
+                // System.err.println("Storing image " + windowId);
+
+                // If the window has been laid out once, then resize the image to fit this
+                if (windowPacked || windowFullscreen) {
+                    int lw = label.getWidth();
+                    int lh = label.getHeight();
+                    if ((lw <= 1) || (lh <= 1)) {
+                        lw = iw;
+                        lh = ih;
+                        System.err.println("Fixing up empty image to size " + lw + "x" + lh);
+                    }
+                    image = image.getScaledInstance(lw, lh, Image.SCALE_SMOOTH);
+                }
+
+                // Store the image into an icon for display
+                ImageIcon ic = new ImageIcon(image);
+                label.setIcon(ic);
+
+                // If the window has a new image then pack it to do layout
+                if (!windowPacked && !windowFullscreen) {
+                    mFrame.setTitle("XTextureExtractor: " + windowAircraft + " " + windowNames.get(windowActive));
+                    mFrame.pack();
+                    windowPacked = true;
+                }
+
+                // Now that the image is displayed, we can prepare to accept another
+                newPngData = null;
+            }
+        }
+    }
+
+    public void networkLoop(String hostname) {
         Boolean cancelled = false;
 
         System.err.println("Connecting to " + hostname + " port " + TCP_PORT);
@@ -93,8 +158,8 @@ public class XTextureExtractor extends JFrame {
             Socket socket = new Socket(hostname, TCP_PORT);
             dataInputStream = new DataInputStream(socket.getInputStream());
         } catch (IOException e) {
-            System.err.println("Failed to make connection");
-            cancelled = true;
+            System.err.println("Failed to make connection - " + e);
+            System.exit(1);
             dataInputStream = null;
         }
         System.err.println("Connection established");
@@ -153,8 +218,8 @@ public class XTextureExtractor extends JFrame {
                     System.exit(1);
                 }
             } catch (IOException e) {
-                System.err.println("Failed to receive initial header, connection has failed");
-                cancelled = true;
+                System.err.println("Failed to receive initial header, connection has failed - " + e);
+                System.exit(1);
             }
         }
 
@@ -199,44 +264,18 @@ public class XTextureExtractor extends JFrame {
             }
 
             try {
-                if (windowId != windowActive) {
-                    // Skip the PNG data if the window is not active
+              if ((windowId != windowActive) || (newPngData != null)) {
+                    // Skip the PNG data if the window is not active or if we are still processing a previous image
                     dataInputStream.skipBytes(expectedBytes);
                 } else {
                     // Read the expected PNG data into a buffer
                     byte[] pngData = new byte[expectedBytes];
                     dataInputStream.readFully(pngData);
-                    ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(pngData);
 
-                    // Read the raw PNG data and put it in the window if it is a match
-                    BufferedImage _image = ImageIO.read(byteArrayInputStream);
-                    int iw = _image.getWidth();
-                    int ih = _image.getHeight();
-                    Image image = _image;
-
-                    // System.err.println("Storing image " + windowId);
-
-                    // If the window has been laid out once, then resize the image to fit this
-                    if (windowPacked || windowFullscreen) {
-                        int lw = label.getWidth();
-                        int lh = label.getHeight();
-                        if ((lw <= 1) || (lh <= 1)) {
-                            lw = iw;
-                            lh = ih;
-                            System.err.println("Fixing up empty image to size " + lw + "x" + lh);
-                        }
-                        image = image.getScaledInstance(lw, lh, Image.SCALE_SMOOTH);
-                    }
-
-                    // Store the image into an icon for display
-                    ImageIcon ic = new ImageIcon(image);
-                    label.setIcon(ic);
-
-                    // If the window has a new image then pack it to do layout
-                    if (!windowPacked && !windowFullscreen) {
-                        mFrame.setTitle("XTextureExtractor: " + windowAircraft + " " + windowNames.get(windowActive));
-                        mFrame.pack();
-                        windowPacked = true;
+                    // Pass the PNG data over to the display thread
+                    synchronized(newPngDataSync) {
+                        newPngData = pngData;
+                        newPngDataSync.notify();
                     }
                 }
 
@@ -246,12 +285,12 @@ public class XTextureExtractor extends JFrame {
                     // Log.d(Const.TAG, "Skipping " + skip + " bytes to pad to 1024 bytes");
                     dataInputStream.skipBytes(skip);
                 } catch (IOException e) {
-                    System.err.println("Failure during padding receive, connection has failed");
+                    System.err.println("Failure during padding receive, connection has failed - " + e);
                     System.exit(1);
                 }
             } catch (IOException e) {
-                System.err.println("Failed to read and decode image");
-                cancelled = true;
+                System.err.println("Failed to read and decode image - " + e);
+                System.exit(1);
                 break;
             }
         }
