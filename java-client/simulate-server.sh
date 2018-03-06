@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd `dirname $0`
+
 while [ 1 ]; do
     
     echo "Starting simulated server on port 52500"
@@ -16,10 +18,10 @@ __EOF__" | dd ibs=4096 conv=sync count=1 2> /dev/null
 	
 	while [ 1 ]; do
             printf '!_____\000_'
-            # Binary size of PNG file, hard coded, from wc --bytes ../app/src/main/res/drawable-nodpi/ic_hsi.png
-            printf '\x5D\x71\x01\x00'
+            # Binary size of PNG file, hard coded, from wc --bytes ../artwork/hsi.png, 84931 is 0x014BC3
+            printf '\xC3\x4B\x01\x00'
             printf '____'
-	    cat ../app/src/main/res/drawable-nodpi/ic_hsi.png | dd ibs=1024 conv=sync
+	    cat ../artwork/hsi.png | dd ibs=1024 conv=sync
 	done
 	
     ) | nc -l 52500

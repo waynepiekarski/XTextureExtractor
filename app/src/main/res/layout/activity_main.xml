@@ -38,16 +38,14 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:scaleType="fitXY"
-            android:src="@drawable/ic_hsi" />
+            android:scaleType="fitXY" />
 
         <ImageView
             android:id="@+id/textureImage2"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:scaleType="fitXY"
-            android:src="@drawable/ic_hsi" />
+            android:scaleType="fitXY" />
     </LinearLayout>
 
     <!-- Click targets that trigger the about pop-up -->
