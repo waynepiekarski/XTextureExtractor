@@ -403,6 +403,7 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
     private fun networkingFatal(reason: String) {
         Log.d(Const.TAG, "Network fatal error due to reason [$reason]")
         Toast.makeText(this, "Network error - $reason", Toast.LENGTH_LONG).show()
+        restartNetworking()
     }
 
     override fun onReceiveTCPHeader(header: ByteArray, tcpRef: TCPBitmapClient) {
@@ -434,10 +435,12 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
             }
             connectAircraft = "$aircraft ${textureWidth}x${textureHeight}"
             if (version != Const.TCP_PLUGIN_VERSION) {
-                networkingFatal("Version [$version] is not expected [$Const.TCP_PLUGIN_VERSION]")
+                networkingFatal("Version [$version] is not expected [${Const.TCP_PLUGIN_VERSION}]")
+                return
             }
             if (windowNames.size <= 0) {
                 networkingFatal("No valid windows were sent")
+                return
             }
             if (window1Idx >= windowNames.size) {
                 window1Idx = 0
@@ -457,9 +460,11 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
         } catch (e: IOException) {
             Log.e(Const.TAG, "IOException processing header - $e")
             networkingFatal("Invalid header data")
+            return
         } catch (e: Exception) {
             Log.e(Const.TAG, "Unknown exception processing header - $e")
             networkingFatal("Invalid header read")
+            return
         }
     }
 }
