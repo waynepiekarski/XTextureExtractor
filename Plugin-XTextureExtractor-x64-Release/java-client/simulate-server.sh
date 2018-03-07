@@ -1,10 +1,12 @@
 #!/bin/bash
 
+cd `dirname $0`
+
 while [ 1 ]; do
     
     echo "Starting simulated server on port 52500"
     (
-	echo "XTEv2 Feb 23 2018 00:15:02
+	echo "XTEv3 Mar 01 2018 00:15:02
 ZB738
 2048 2048
 ND 524 1550 1018 2038
@@ -15,8 +17,11 @@ CDU 10 544 540 1023
 __EOF__" | dd ibs=4096 conv=sync count=1 2> /dev/null
 	
 	while [ 1 ]; do
-	    printf '!_\000_'
-	    cat ../app/src/main/res/drawable-nodpi/ic_hsi.png
+            printf '!_____\000_'
+            # Binary size of PNG file, hard coded, from wc --bytes ../artwork/hsi.png, 84931 is 0x014BC3
+            printf '\xC3\x4B\x01\x00'
+            printf '____'
+	    cat ../artwork/hsi.png | dd ibs=1024 conv=sync
 	done
 	
     ) | nc -l 52500
