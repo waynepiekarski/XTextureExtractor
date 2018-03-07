@@ -29,6 +29,8 @@ object Const {
     val TCP_PLUGIN_VERSION = "XTEv3"
     val BECN_PORT = 49707
     val BECN_ADDRESS = "239.255.1.1"
+    val ERROR_NETWORK_SLEEP: Long = 1000 // Number of msec to wait on network failure
+    val ERROR_MULTICAST_LOOPS = 5 // Number of loops (seconds) before we give up and restart the socket
 
     fun getBuildId(): Int { return BuildConfig.VERSION_CODE }
     fun getBuildVersion(): String { return BuildConfig.VERSION_NAME }

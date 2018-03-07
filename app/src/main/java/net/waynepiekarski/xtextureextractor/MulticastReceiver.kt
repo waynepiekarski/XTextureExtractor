@@ -35,7 +35,6 @@ class MulticastReceiver (private var address: String, private var port: Int, pri
     private lateinit var socket: MulticastSocket
     @Volatile private var cancelled = false
     private var lastAddress: InetAddress? = null
-    private val timeoutLimitSeconds = 5 // Number of seconds before we give up and restart the socket
 
     interface OnReceiveMulticast {
         fun onReceiveMulticast(buffer: ByteArray, source: InetAddress, ref: MulticastReceiver)
@@ -76,11 +75,11 @@ class MulticastReceiver (private var address: String, private var port: Int, pri
                             }
                         } catch (e: SocketTimeoutException) {
                             timeoutCount++
-                            if (timeoutCount >= timeoutLimitSeconds) {
-                                Log.d(Const.TAG, "Multicast socket has not received anything in $timeoutLimitSeconds seconds, breaking out of socket loop")
+                            if (timeoutCount >= Const.ERROR_MULTICAST_LOOPS) {
+                                Log.d(Const.TAG, "Multicast socket has not received anything in ${Const.ERROR_MULTICAST_LOOPS} seconds, breaking out of socket loop")
                                 break
                             } else {
-                                Log.d(Const.TAG, "Multicast timeout $timeoutCount sec of $timeoutLimitSeconds sec, reading again ...")
+                                Log.d(Const.TAG, "Multicast timeout $timeoutCount sec of ${Const.ERROR_MULTICAST_LOOPS} sec, reading again ...")
                             }
                         } catch (e: IOException) {
                             Log.e(Const.TAG, "Failed to read packet, breaking out of socket loop: " + e)
@@ -102,7 +101,7 @@ class MulticastReceiver (private var address: String, private var port: Int, pri
                         MainActivity.doUiThread { callback.onFailureMulticast(this) }
                     else
                         MainActivity.doUiThread { callback.onTimeoutMulticast(this) }
-                    Thread.sleep(1000)
+                    Thread.sleep(Const.ERROR_NETWORK_SLEEP)
                 }
             }
 
