@@ -29,6 +29,7 @@ import java.net.*
 import kotlin.concurrent.thread
 import java.io.*
 import android.graphics.BitmapFactory
+import android.os.Build
 import android.widget.Toast
 
 
@@ -178,9 +179,21 @@ class TCPBitmapClient (private var address: InetAddress, private var port: Int, 
                 // Read the raw PNG data and decode it
                 var bitmap: Bitmap?
                 try {
-                    bitmap = BitmapFactory.decodeStream(dataInputStream)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                        // The image decoder in >= API 19 correctly reads all the bytes for the image
+                        bitmap = BitmapFactory.decodeStream(dataInputStream)
+                    } else {
+                        // Android versions earlier than API 19 have a bug where decodeStream does not read up all
+                        // remaining bytes and the stream gets out of sync. So we read the data manually into a
+                        // buffer and then pass it in for decoding. If I could measure the bytes read in decodeStream
+                        // we could do this more efficiently.
+                        val pngData = ByteArray(expectedBytes)
+                        dataInputStream.readFully(pngData)
+                        val byteArrayInputStream = ByteArrayInputStream(pngData)
+                        bitmap = BitmapFactory.decodeStream(byteArrayInputStream)
+                    }
                 } catch (e: IOException) {
-                    Log.d(Const.TAG, "Exception during socket bitmap decode $e")
+                    Log.d(Const.TAG, "Exception during socket read or bitmap decode $e")
                     bitmap = null
                 }
                 if (bitmap == null) {
