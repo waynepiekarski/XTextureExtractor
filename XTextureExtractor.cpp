@@ -29,7 +29,7 @@ using namespace std;
 
 // Set some arbitrary limit on the number of windows that can be supported
 static XPLMWindowID	g_window[COCKPIT_MAX_WINDOWS];
-XPLMDataRef gAcfNotes = NULL;
+XPLMDataRef gAcfTailnum = NULL;
 GLint cockpit_texture_id = 0;
 GLint cockpit_texture_width = -1;
 GLint cockpit_texture_height = -1;
@@ -50,30 +50,30 @@ int   cockpit_window_limit = 0;
 void detect_aircraft_filename(void) {
 	char filename[256];
 	char path[256];
-	char notes[256];
+	char tailnum[256];
 	XPLMGetNthAircraftModel(XPLM_USER_AIRCRAFT, filename, path);
 	_strlwr(filename);
 	_strlwr(path);
 
 	int result;
-	if (gAcfNotes == NULL) {
-		strcpy(notes, "(null)");
+	if (gAcfTailnum == NULL) {
+		strcpy(tailnum, "(null)");
 	}
 	else {
-		result = XPLMGetDatab(gAcfNotes, notes, 0, 256);
+		result = XPLMGetDatab(gAcfTailnum, tailnum, 0, 256);
 		if (result < 0) {
-			strcpy(notes, "(error)");
+			strcpy(tailnum, "(error)");
 		}
 		else {
-			// Need to terminate the strings
-			notes[result] = '\0';
-			_strlwr(notes);
+			// Need to terminate the strings and convert to lower case
+			tailnum[result] = '\0';
+			_strlwr(tailnum);
 		}
 	}
 
-	if (strstr(notes, "zibomod")) {
+	if (strstr(tailnum, "zb73")) {
 		strcpy(cockpit_aircraft_filename, "zibo-b738.acf");
-		log_printf("Found ZiboMod 738 based on acf_notes, changing file name to [%s]\n", cockpit_aircraft_filename);
+		log_printf("Found ZiboMod 738 or Ultimate 739 based on acf_tailnum [%s], changing file name to [%s]\n", tailnum, cockpit_aircraft_filename);
 	}
 	else {
 		strcpy(cockpit_aircraft_filename, filename);
@@ -168,7 +168,7 @@ PLUGIN_API int XPluginStart(
 	log_printf("XPluginStart: XTextureExtractor plugin - %s - path %s\n", outDesc, plugin_path);
 
 	// Register to listen for aircraft notes information, so we can detect Zibo 738 later
-	gAcfNotes = XPLMFindDataRef("sim/aircraft/view/acf_notes");
+	gAcfTailnum = XPLMFindDataRef("sim/aircraft/view/acf_tailnum");
 
 	// Global save button that increments each time
 	strcpy(cockpit_save_string, "Sv");
