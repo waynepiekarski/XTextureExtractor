@@ -113,6 +113,15 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 
 	freeaddrinfo(result);
 
+	int reuse = 1;
+	iResult = setsockopt(ListenSocket, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse, sizeof(reuse));
+	if (iResult == SOCKET_ERROR) {
+		log_printf("Fatal: setsockopt SO_REUSEADDR failed with error: %d\n", WSAGetLastError());
+		closesocket(ListenSocket);
+		WSACleanup();
+		return 1;
+	}
+
 	iResult = listen(ListenSocket, SOMAXCONN);
 	if (iResult == SOCKET_ERROR) {
 		log_printf("Fatal: listen failed with error: %d\n", WSAGetLastError());
