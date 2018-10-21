@@ -116,6 +116,7 @@ static void find_last_match_in_texture(GLint start_texture_id)
 void load_window_state();
 void				draw(XPLMWindowID in_window_id, void * in_refcon);
 int					handle_mouse(XPLMWindowID in_window_id, int x, int y, int is_down, void * in_refcon);
+int                 handle_command(XPLMCommandRef cmd_id, XPLMCommandPhase phase, void * in_refcon);
 
 int					dummy_mouse_handler(XPLMWindowID in_window_id, int x, int y, int is_down, void * in_refcon) { return 0; }
 XPLMCursorStatus	dummy_cursor_status_handler(XPLMWindowID in_window_id, int x, int y, void * in_refcon) { return xplm_CursorDefault; }
@@ -130,6 +131,14 @@ static int _g_save_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, 
 static int _g_clear_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_hide_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_dump_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
+
+XPLMCommandRef cmd_texture_button = NULL;
+XPLMCommandRef cmd_scan_button = NULL;
+XPLMCommandRef cmd_load_button = NULL;
+XPLMCommandRef cmd_save_button = NULL;
+XPLMCommandRef cmd_clear_button = NULL;
+XPLMCommandRef cmd_hide_button = NULL;
+XPLMCommandRef cmd_dump_button = NULL;
 
 char _g_window_name[COCKPIT_MAX_WINDOWS][256];  // titles of each window
 int _g_texture_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
@@ -179,6 +188,15 @@ PLUGIN_API int XPluginStart(
 	XPLMRegisterHotKey(XPLM_VK_F8, xplm_DownFlag, "F8", process_debug_key, NULL);
 #endif
 
+	// Implement commands for all the buttons we support
+	XPLMRegisterCommandHandler(cmd_texture_button = XPLMCreateCommand("XTE/newscan", "XTextureExtractor New Scan"), handle_command, 1, "New Scan");
+	XPLMRegisterCommandHandler(cmd_scan_button  = XPLMCreateCommand("XTE/scan", "XTextureExtractor Scan"),  handle_command, 1, "Scan");
+	XPLMRegisterCommandHandler(cmd_load_button  = XPLMCreateCommand("XTE/load", "XTextureExtractor Load"),  handle_command, 1, "Load");
+	XPLMRegisterCommandHandler(cmd_save_button  = XPLMCreateCommand("XTE/save", "XTextureExtractor Save"),  handle_command, 1, "Save");
+	XPLMRegisterCommandHandler(cmd_clear_button = XPLMCreateCommand("XTE/clear", "XTextureExtractor Clear"), handle_command, 1, "Clear");
+	XPLMRegisterCommandHandler(cmd_hide_button  = XPLMCreateCommand("XTE/hide", "XTextureExtractor Hide"),  handle_command, 1, "Hide");
+	XPLMRegisterCommandHandler(cmd_dump_button  = XPLMCreateCommand("XTE/dump", "XTextureExtractor Dump"),  handle_command, 1, "Dump");
+
 	return 1;
 }
 
@@ -193,6 +211,14 @@ PLUGIN_API void	XPluginStop(void)
 			g_window[i] = NULL;
 		}
 	}
+
+	if (cmd_texture_button != NULL) XPLMUnregisterCommandHandler(cmd_texture_button, handle_command, 0, 0); cmd_texture_button = NULL;
+	if (cmd_scan_button != NULL) XPLMUnregisterCommandHandler(cmd_scan_button, handle_command, 0, 0); cmd_scan_button = NULL;
+	if (cmd_load_button != NULL) XPLMUnregisterCommandHandler(cmd_load_button, handle_command, 0, 0); cmd_load_button = NULL;
+	if (cmd_save_button != NULL) XPLMUnregisterCommandHandler(cmd_save_button, handle_command, 0, 0); cmd_save_button = NULL;
+	if (cmd_clear_button != NULL) XPLMUnregisterCommandHandler(cmd_clear_button, handle_command, 0, 0); cmd_clear_button = NULL;
+	if (cmd_hide_button != NULL) XPLMUnregisterCommandHandler(cmd_hide_button, handle_command, 0, 0); cmd_hide_button = NULL;
+	if (cmd_dump_button != NULL) XPLMUnregisterCommandHandler(cmd_dump_button, handle_command, 0, 0); cmd_dump_button = NULL;
 }
 
 bool plugin_disabled = false;
@@ -652,6 +678,44 @@ int	handle_mouse(XPLMWindowID in_window_id, int x, int y, XPLMMouseStatus is_dow
 				log_printf("Inverting window decorations to %d\n", decorateWindows);
 				load_window_state();
 			}
+		}
+	}
+	return 1;
+}
+
+int handle_command(XPLMCommandRef cmd_id, XPLMCommandPhase phase, void * in_refcon)
+{
+	// Only do the command when it is being released
+	if (phase == xplm_CommandEnd)
+	{
+		log_printf("Found incoming command %p with reference [%s]\n", cmd_id, (char *)in_refcon);
+		if (cmd_id == cmd_texture_button) { // user clicked the "texture info button" button
+			// Rescan from the top for the best texture, this usually works
+			find_last_match_in_texture(-1);
+		}
+		else if (cmd_id == cmd_scan_button) {
+			// Resume from the current texture, this is when the default algorithm fails but is very rare
+			find_last_match_in_texture(cockpit_texture_id - 1);
+		}
+		else if (cmd_id == cmd_load_button) {
+			load_window_state();
+		}
+		else if (cmd_id == cmd_save_button) {
+			save_window_state();
+		}
+		else if (cmd_id == cmd_clear_button) {
+			clear_window_state();
+		}
+		else if (cmd_id == cmd_hide_button) {
+			decorateWindows = !decorateWindows;
+			log_printf("Inverting window decorations to %d\n", decorateWindows);
+			load_window_state();
+		}
+		else if (cmd_id == cmd_dump_button) {
+			dump_debug();
+		}
+		else {
+			log_printf("Ignoring unknown command\n");
 		}
 	}
 	return 1;
