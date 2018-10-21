@@ -44,6 +44,8 @@ char  cockpit_aircraft_filename[256];
 char  plugin_path[MAX_PATH];
 int   cockpit_save_count = 0;
 char  cockpit_save_string[32];
+int   cockpit_scan_count = 0;
+char  cockpit_scan_string[32];
 int   cockpit_window_limit = 0;
 
 
@@ -86,8 +88,15 @@ int network_started = false;
 
 static void find_last_match_in_texture(GLint start_texture_id)
 {
-	if (start_texture_id <= 0)
+	if (start_texture_id <= 0) {
 		start_texture_id = cockpit_texture_last;
+		cockpit_scan_count = -1;
+	}
+	else {
+		cockpit_scan_count--;
+	}
+	sprintf(cockpit_scan_string, "<<%d", cockpit_scan_count);
+
 	log_printf("Finding last texture from %d (max=%d) that matches fw=%d, fh=%d, ff=%d for aircraft %s\n", start_texture_id, cockpit_texture_last, cockpit_texture_width, cockpit_texture_height, cockpit_texture_format, cockpit_aircraft_filename);
 	int tw, th, tf;
 	for (int i = start_texture_id; i >= 0; i--) {
@@ -181,6 +190,7 @@ PLUGIN_API int XPluginStart(
 
 	// Global save button that increments each time
 	strcpy(cockpit_save_string, "Sv");
+	strcpy(cockpit_scan_string, "<<X");
 
 	// Implement a debugging key if we need it
 #ifdef DEBUG_KEYPRESS
@@ -394,7 +404,7 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 
 #define DEFINE_BOX(_array, _left, _string) _array[0] = _left[2] + 10, _array[1] = _left[1], _array[2] = _array[0] + (int)XPLMMeasureString(xplmFont_Proportional, _string, (int)strlen(_string)), _array[3] = _left[3]
 		DEFINE_BOX(g_texture_button_lbrt, g_pop_button_lbrt, texture_info_text);
-		DEFINE_BOX(g_scan_button_lbrt, g_texture_button_lbrt, "<<");
+		DEFINE_BOX(g_scan_button_lbrt, g_texture_button_lbrt, cockpit_scan_string);
 		DEFINE_BOX(g_load_button_lbrt, g_scan_button_lbrt, "Ld");
 		DEFINE_BOX(g_save_button_lbrt, g_load_button_lbrt, cockpit_save_string);
 		DEFINE_BOX(g_clear_button_lbrt, g_save_button_lbrt, "Clr");
@@ -423,7 +433,7 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		XPLMDrawString(col_white, g_texture_button_lbrt[0], g_texture_button_lbrt[1] + 4, (char *)texture_info_text, NULL, xplmFont_Proportional);
 
 		// Draw the load/save/clear text
-		XPLMDrawString(col_white, g_scan_button_lbrt[0],  g_scan_button_lbrt[1] + 4, (char *)"<<", NULL, xplmFont_Proportional);
+		XPLMDrawString(col_white, g_scan_button_lbrt[0],  g_scan_button_lbrt[1] + 4, (char *)cockpit_scan_string, NULL, xplmFont_Proportional);
 		XPLMDrawString(col_white, g_load_button_lbrt[0],  g_load_button_lbrt[1]  + 4, (char *)"Ld", NULL, xplmFont_Proportional);
 		XPLMDrawString(col_white, g_save_button_lbrt[0],  g_save_button_lbrt[1]  + 4, (char *)cockpit_save_string, NULL, xplmFont_Proportional);
 		XPLMDrawString(col_white, g_clear_button_lbrt[0], g_clear_button_lbrt[1] + 4, (char *)"Clr", NULL, xplmFont_Proportional);
