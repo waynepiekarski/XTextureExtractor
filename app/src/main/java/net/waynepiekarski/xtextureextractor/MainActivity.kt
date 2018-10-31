@@ -35,6 +35,7 @@ import android.app.AlertDialog
 import android.content.Context
 import android.os.*
 import android.text.InputType
+import android.view.KeyEvent
 import android.widget.LinearLayout
 import java.io.BufferedReader
 import java.io.ByteArrayInputStream
@@ -94,33 +95,9 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
             }
         }
 
-        textureImage1.setOnClickListener {
-            if (windowNames.size <= 0)
-                return@setOnClickListener
-            window1Idx++
-            if (window1Idx >= windowNames.size)
-                window1Idx = 0
-            val sharedPref = getPreferences(Context.MODE_PRIVATE)
-            with(sharedPref.edit()){
-                putInt("window_1_idx", window1Idx)
-                commit()
-            }
-            Log.d(Const.TAG, "Changed window for texture 1 to $window1Idx=[${windowNames[window1Idx]}]")
-        }
+        textureImage1.setOnClickListener { changeWindow1() }
 
-        textureImage2.setOnClickListener {
-            if (windowNames.size <= 0)
-                return@setOnClickListener
-            window2Idx++
-            if (window2Idx >= windowNames.size)
-                window2Idx = 0
-            val sharedPref = getPreferences(Context.MODE_PRIVATE)
-            with(sharedPref.edit()){
-                putInt("window_2_idx", window2Idx)
-                commit()
-            }
-            Log.d(Const.TAG, "Changed window for texture 2 to $window2Idx=[${windowNames[window2Idx]}]")
-        }
+        textureImage2.setOnClickListener { changeWindow2() }
 
         connectText.setOnClickListener {
             popupManualHostname()
@@ -130,6 +107,44 @@ class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastRece
             aboutText.visibility = View.INVISIBLE
         }
     }
+
+    fun changeWindow1() {
+        if (windowNames.size <= 0)
+            return
+        window1Idx++
+        if (window1Idx >= windowNames.size)
+            window1Idx = 0
+        val sharedPref = getPreferences(Context.MODE_PRIVATE)
+        with(sharedPref.edit()){
+            putInt("window_1_idx", window1Idx)
+            commit()
+        }
+        Log.d(Const.TAG, "Changed window for texture 1 to $window1Idx=[${windowNames[window1Idx]}]")
+    }
+
+    fun changeWindow2() {
+        if (windowNames.size <= 0)
+            return
+        window2Idx++
+        if (window2Idx >= windowNames.size)
+            window2Idx = 0
+        val sharedPref = getPreferences(Context.MODE_PRIVATE)
+        with(sharedPref.edit()){
+            putInt("window_2_idx", window2Idx)
+            commit()
+        }
+        Log.d(Const.TAG, "Changed window for texture 2 to $window2Idx=[${windowNames[window2Idx]}]")
+    }
+
+    // Handle D-pad events to change the windows
+    override fun onKeyDown(keyCode: Int, ev: KeyEvent): Boolean {
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> changeWindow1()
+            KeyEvent.KEYCODE_DPAD_RIGHT -> changeWindow2()
+        }
+        return true // We processed this event
+    }
+
 
     companion object {
         private var backgroundThread: HandlerThread? = null
