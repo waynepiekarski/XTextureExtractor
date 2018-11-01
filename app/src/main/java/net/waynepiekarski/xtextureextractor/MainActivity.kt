@@ -44,7 +44,7 @@ import java.io.InputStreamReader
 import java.net.UnknownHostException
 
 
-class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastReceiver.OnReceiveMulticast {
+open class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, MulticastReceiver.OnReceiveMulticast {
 
     private var becn_listener: MulticastReceiver? = null
     private var tcp_extplane: TCPBitmapClient? = null
