@@ -141,6 +141,8 @@ open class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, Multicas
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> changeWindow1()
             KeyEvent.KEYCODE_DPAD_RIGHT -> changeWindow2()
+            KeyEvent.KEYCODE_DPAD_UP -> aboutText.visibility = if (aboutText.visibility == View.VISIBLE) View.INVISIBLE else View.VISIBLE
+            KeyEvent.KEYCODE_DPAD_DOWN -> aboutText.visibility = if (aboutText.visibility == View.VISIBLE) View.INVISIBLE else View.VISIBLE
         }
         return true // We processed this event
     }

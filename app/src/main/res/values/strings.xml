@@ -11,5 +11,5 @@
 
     <color name="app_background">#FF400000</color>
 
-    <string name="help_text">XTextureExtractor - TCP port 52500\n\nOn Android phones and tablets:\nClick the corners to bring up help and usage information.\nClick the connection status to specify a manual hostname.\nClick the instruments to cycle through each window view.\n\nOn Android TV devices:\nThis app will auto-detect X-Plane using BECN broadcasts.\nLeft and right remote control buttons cycle the displays.</string>
+    <string name="help_text">XTextureExtractor - TCP port 52500\n\nOn Android phones and tablets:\nClick the corners to bring up help and usage information.\nClick the connection status to specify a manual hostname.\nClick the instruments to cycle through each window view.\n\nOn Android TV devices:\nThis app will auto-detect X-Plane using BECN broadcasts.\nLeft and right remote control buttons cycle the displays.\nUp and down remote control buttons toggle help information.</string>
 </resources>
