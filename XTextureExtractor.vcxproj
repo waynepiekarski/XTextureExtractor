@@ -47,8 +47,8 @@
     <TargetExt>.xpl</TargetExt>
     <GenerateManifest>false</GenerateManifest>
     <TargetName>win</TargetName>
-    <IntDir>build-$(ProjectName)-$(Platform)-$(Configuration)\</IntDir>
-    <OutDir>output-$(ProjectName)-$(Platform)-$(Configuration)\64\</OutDir>
+    <IntDir>build2-$(ProjectName)-$(Platform)-$(Configuration)\</IntDir>
+    <OutDir>output2-$(ProjectName)-$(Platform)-$(Configuration)\64\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>false</LinkIncremental>
@@ -95,14 +95,14 @@
       <SubSystem>Console</SubSystem>
       <AdditionalLibraryDirectories>SDK\Libraries\Win;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>Opengl32.lib;odbc32.lib;odbccp32.lib;XPLM_64.lib;XPWidgets_64.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OutputFile>Plugin-$(ProjectName)-$(Platform)-$(Configuration)\64\$(TargetName)$(TargetExt)</OutputFile>
+      <OutputFile>Plugin2-$(ProjectName)-$(Platform)-$(Configuration)\64\$(TargetName)$(TargetExt)</OutputFile>
     </Link>
     <CustomBuildStep>
       <Command>
       </Command>
     </CustomBuildStep>
     <PostBuildEvent>
-      <Command>xcopy /y XTextureExtractor-Data\*.* Plugin-$(ProjectName)-$(Platform)-$(Configuration)\</Command>
+      <Command>xcopy /y XTextureExtractor-Data\*.* Plugin2-$(ProjectName)-$(Platform)-$(Configuration)\</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">

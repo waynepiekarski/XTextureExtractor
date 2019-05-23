@@ -46,10 +46,10 @@
 #endif
 
 static char __log_printf_buffer[4096];
-#define log_printf(fmt, ...) snprintf(__log_printf_buffer, 4096, "XTextureExtractor: " fmt, __VA_ARGS__), XPLMDebugString(__log_printf_buffer)
+#define log_printf(fmt, ...) snprintf(__log_printf_buffer, 4096, "XTextureExtractor2: " fmt, __VA_ARGS__), XPLMDebugString(__log_printf_buffer)
 
 #define COCKPIT_MAX_WINDOWS 20
-#define TCP_PLUGIN_PORT    "52500"
+#define TCP_PLUGIN_PORT    "52501"
 #define MAX_TEXTURE_WIDTH  2048
 #define MAX_TEXTURE_HEIGHT 2048
 #define TCP_INTRO_HEADER   4096

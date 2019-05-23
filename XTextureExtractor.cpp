@@ -180,10 +180,10 @@ PLUGIN_API int XPluginStart(
 	}
 	strcat(plugin_path, "\\..\\");
 
-	strcpy(outName, "XTextureExtractorPlugin");
-	strcpy(outSig, "net.waynepiekarski.windowcockpitplugin");
+	strcpy(outName, "XTextureExtractorPlugin2");
+	strcpy(outSig, "net.waynepiekarski.windowcockpitplugin2");
 	sprintf(outDesc, "%s - Extracts out cockpit textures into a separate window - compiled %s %s", TCP_PLUGIN_VERSION, __DATE__, __TIME__);
-	log_printf("XPluginStart: XTextureExtractor plugin - %s - path %s\n", outDesc, plugin_path);
+	log_printf("XPluginStart: XTextureExtractor2 plugin - %s - path %s\n", outDesc, plugin_path);
 
 	// Register to listen for aircraft notes information, so we can detect Zibo 738 later
 	gAcfTailnum = XPLMFindDataRef("sim/aircraft/view/acf_tailnum");
@@ -199,20 +199,20 @@ PLUGIN_API int XPluginStart(
 #endif
 
 	// Implement commands for all the buttons we support
-	XPLMRegisterCommandHandler(cmd_texture_button = XPLMCreateCommand("XTE/newscan", "XTextureExtractor New Scan"), handle_command, 1, "New Scan");
-	XPLMRegisterCommandHandler(cmd_scan_button  = XPLMCreateCommand("XTE/scan", "XTextureExtractor Scan"),  handle_command, 1, "Scan");
-	XPLMRegisterCommandHandler(cmd_load_button  = XPLMCreateCommand("XTE/load", "XTextureExtractor Load"),  handle_command, 1, "Load");
-	XPLMRegisterCommandHandler(cmd_save_button  = XPLMCreateCommand("XTE/save", "XTextureExtractor Save"),  handle_command, 1, "Save");
-	XPLMRegisterCommandHandler(cmd_clear_button = XPLMCreateCommand("XTE/clear", "XTextureExtractor Clear"), handle_command, 1, "Clear");
-	XPLMRegisterCommandHandler(cmd_hide_button  = XPLMCreateCommand("XTE/hide", "XTextureExtractor Hide"),  handle_command, 1, "Hide");
-	XPLMRegisterCommandHandler(cmd_dump_button  = XPLMCreateCommand("XTE/dump", "XTextureExtractor Dump"),  handle_command, 1, "Dump");
+	XPLMRegisterCommandHandler(cmd_texture_button = XPLMCreateCommand("XTE2/newscan", "XTextureExtractor2 New Scan"), handle_command, 1, "New Scan");
+	XPLMRegisterCommandHandler(cmd_scan_button  = XPLMCreateCommand("XTE2/scan", "XTextureExtractor2 Scan"),  handle_command, 1, "Scan");
+	XPLMRegisterCommandHandler(cmd_load_button  = XPLMCreateCommand("XTE2/load", "XTextureExtractor2 Load"),  handle_command, 1, "Load");
+	XPLMRegisterCommandHandler(cmd_save_button  = XPLMCreateCommand("XTE2/save", "XTextureExtractor2 Save"),  handle_command, 1, "Save");
+	XPLMRegisterCommandHandler(cmd_clear_button = XPLMCreateCommand("XTE2/clear", "XTextureExtractor2 Clear"), handle_command, 1, "Clear");
+	XPLMRegisterCommandHandler(cmd_hide_button  = XPLMCreateCommand("XTE2/hide", "XTextureExtractor2 Hide"),  handle_command, 1, "Hide");
+	XPLMRegisterCommandHandler(cmd_dump_button  = XPLMCreateCommand("XTE2/dump", "XTextureExtractor2 Dump"),  handle_command, 1, "Dump");
 
 	return 1;
 }
 
 PLUGIN_API void	XPluginStop(void)
 {
-	log_printf("XPluginStop: XTextureExtractor plugin\n");
+	log_printf("XPluginStop: XTextureExtractor2 plugin\n");
 
 	// Destroy the windows if they exist
 	for (int i = 0; i < COCKPIT_MAX_WINDOWS; i++) {
@@ -297,7 +297,7 @@ void save_png(GLint texId)
 	state.encoder.auto_convert = 0; // Must provide this or will ignore the input/output types
 	unsigned error = lodepng::encode(png, flipped, tw, th, state);
 
-	FILE *fp = fopen("texture_save.png", "wb");
+	FILE *fp = fopen("texture_save2.png", "wb");
 	if (fp == NULL) {
 		log_printf("Could not save to file\n");
 		delete[] pixels;
@@ -308,7 +308,7 @@ void save_png(GLint texId)
 	delete[] pixels;
 	delete[] flipped;
 	if (fclose(fp) == 0) {
-		log_printf("PNG save of %zu bytes is complete to file texture_save.png in X-Plane main directory\n", png.size());
+		log_printf("PNG save of %zu bytes is complete to file texture_save2.png in X-Plane main directory\n", png.size());
 	}
 	else {
 		log_printf("Failed to save PNG file\n");
@@ -400,7 +400,7 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		
 		// Position the "move to lower left" button just to the right of the pop-in/pop-out button
 		char texture_info_text[128];
-		sprintf(texture_info_text, "GL%d [%s]", cockpit_texture_id, cockpit_aircraft_name);
+		sprintf(texture_info_text, "2GL%d [%s]", cockpit_texture_id, cockpit_aircraft_name);
 
 #define DEFINE_BOX(_array, _left, _string) _array[0] = _left[2] + 10, _array[1] = _left[1], _array[2] = _array[0] + (int)XPLMMeasureString(xplmFont_Proportional, _string, (int)strlen(_string)), _array[3] = _left[3]
 		DEFINE_BOX(g_texture_button_lbrt, g_pop_button_lbrt, texture_info_text);
@@ -497,14 +497,14 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 
 void clear_window_state() {
 	char filename[256];
-	sprintf(filename, "windowcockpit-%s.txt", cockpit_aircraft_name);
+	sprintf(filename, "windowcockpit-%s.txt2", cockpit_aircraft_name);
 	log_printf("Removing window save file %s\n", filename);
 	_unlink(filename);
 }
 
 void save_window_state() {
 	char filename[256];
-	sprintf(filename, "windowcockpit-%s.txt", cockpit_aircraft_name);
+	sprintf(filename, "windowcockpit-%s.txt2", cockpit_aircraft_name);
 	log_printf("Saving XTextureExtractor state to %s\n", filename);
 	FILE *fp = fopen(filename, "wb");
 	if (fp == NULL) {
@@ -546,7 +546,7 @@ void load_window_state() {
 	cockpit_window_limit = 0;
 	cockpit_aircraft_known = false;
 	char texturefile[256];
-	sprintf(texturefile, "%s\\%s.tex", plugin_path, cockpit_aircraft_filename);
+	sprintf(texturefile, "%s\\%s.tex2", plugin_path, cockpit_aircraft_filename);
 	FILE *fp = fopen(texturefile, "rb");
 	if (fp == NULL) {
 		log_printf("Could not load texture data from file %s, this aircraft is unknown\n", texturefile);
@@ -608,14 +608,14 @@ void load_window_state() {
 		XPLMSetWindowGravity(g_window[i], 0, 1, 0, 1); // As the X-Plane window resizes, keep our size constant, and our left and top edges in the same place relative to the window's left/top
 													   // XPLMSetWindowResizingLimits(g_window[i], 200, 200, 1000, 1000); // Limit resizing our window: maintain a minimum width/height of 200 boxels and a max width/height of 500
 		char winname[1024];
-		sprintf(winname, "XTextureExtractor: %s", _g_window_name[i]);
+		sprintf(winname, "XTextureExtractor2: %s", _g_window_name[i]);
 		XPLMSetWindowTitle(g_window[i], winname);
 	}
 
 
 	// Configure the window based on a local configuration file (if present)
 	char filename[256];
-	sprintf(filename, "windowcockpit-%s.txt", cockpit_aircraft_name);
+	sprintf(filename, "windowcockpit-%s.txt2", cockpit_aircraft_name);
 	fp = fopen(filename, "rb");
 	if (fp == NULL) {
 		log_printf("Could not load from file %s\n", filename);
