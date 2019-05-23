@@ -2,6 +2,8 @@
 /*.user
 /build-*
 /output-*
+/build2-*
+/output2-*
 # Ignore Android Studio generated files
 .idea
 .gradle
