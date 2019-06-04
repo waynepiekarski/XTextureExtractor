@@ -309,8 +309,9 @@ public class XTextureExtractor extends JFrame {
     }
 
     public static void usage(String reason) {
+        System.err.println("Error: " + reason);
         System.err.println("XTextureExtractor, streams PNGs from port " + TCP_PORT);
-        System.err.println(reason + ": <hostname> [--fullscreen] [--windowN] [--geometry=X,Y,W,H]");
+	System.err.println("Usage: <hostname> [--fullscreen] [--windowN] [--geometry=X,Y,W,H]");
     }
 
     public static void main(String[] args) {
