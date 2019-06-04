@@ -44,6 +44,8 @@ public class XTextureExtractor extends JFrame {
     public JFrame mFrame;
     static public int windowActive = -1;
     static public boolean windowFullscreen = false;
+    static public boolean windowGeometry = false;
+    static public int windowGeometryX, windowGeometryY, windowGeometryW, windowGeometryH;
     String windowAircraft;
     Boolean windowPacked = false;
     ArrayList<String> windowNames = new ArrayList<String>();
@@ -55,6 +57,13 @@ public class XTextureExtractor extends JFrame {
         mFrame = this;
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setTitle("XTextureExtractor");
+
+        if (windowGeometry) {
+            setUndecorated(true);
+            setVisible(true);
+            System.err.println("Setting manual geometry X=" + windowGeometryX + " Y=" + windowGeometryY + " W=" + windowGeometryW + " H=" + windowGeometryH + " with no decorations");
+            setBounds(windowGeometryX, windowGeometryY, windowGeometryW, windowGeometryH);
+        }
 
         if (windowFullscreen) {
             setExtendedState(JFrame.MAXIMIZED_BOTH);
@@ -121,7 +130,7 @@ public class XTextureExtractor extends JFrame {
                 // System.err.println("Storing image " + windowId);
 
                 // If the window has been laid out once, then resize the image to fit this
-                if (windowPacked || windowFullscreen) {
+                if (windowPacked || windowFullscreen || windowGeometry) {
                     int lw = label.getWidth();
                     int lh = label.getHeight();
                     if ((lw <= 1) || (lh <= 1)) {
@@ -137,7 +146,7 @@ public class XTextureExtractor extends JFrame {
                 label.setIcon(ic);
 
                 // If the window has a new image then pack it to do layout
-                if (!windowPacked && !windowFullscreen) {
+                if (!windowPacked && !windowFullscreen && !windowGeometry) {
                     mFrame.setTitle("XTextureExtractor: " + windowAircraft + " " + windowNames.get(windowActive));
                     mFrame.pack();
                     windowPacked = true;
@@ -299,6 +308,12 @@ public class XTextureExtractor extends JFrame {
         System.exit(1);
     }
 
+    public static void usage(String reason) {
+        System.err.println("Error: " + reason);
+        System.err.println("XTextureExtractor, streams PNGs from port " + TCP_PORT);
+	System.err.println("Usage: <hostname> [--fullscreen] [--windowN] [--geometry=X,Y,W,H]");
+    }
+
     public static void main(String[] args) {
         ArrayList<String> list = new ArrayList<>(Arrays.asList(args));
         ListIterator<String> iter = list.listIterator();
@@ -313,13 +328,26 @@ public class XTextureExtractor extends JFrame {
                 System.err.println("Selected full screen mode");
                 windowFullscreen = true;
                 iter.remove();
+            } else if (s.startsWith("--geometry=")) {
+                s = s.substring("--geometry=".length());
+                String[] g = s.split(",");
+                if (g.length != 4) {
+                    usage("--geometry requires 4 integer arguments");
+                    System.exit(1);
+                }
+                windowGeometryX = Integer.parseInt(g[0]);
+                windowGeometryY = Integer.parseInt(g[1]);
+                windowGeometryW = Integer.parseInt(g[2]);
+                windowGeometryH = Integer.parseInt(g[3]);
+                System.err.println("Decoded manual geometry X=" + windowGeometryX + " Y=" + windowGeometryY + " W=" + windowGeometryW + " H=" + windowGeometryH);
+                windowGeometry = true;
+                iter.remove();
             } else {
                 System.err.println("Leaving argument " + s);
             }
         }
         if (list.isEmpty()) {
-            System.err.println("XTextureExtractor, streams PNGs from port " + TCP_PORT);
-            System.err.println("Requires an argument: <hostname> [--fullscreen] [--windowN]");
+            usage("Requires an argument");
             System.exit(1);
         }
         final String _hostname = list.get(0);
