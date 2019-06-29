@@ -561,6 +561,11 @@ void load_window_state() {
 	} else {
 		log_printf("Read in [%s] = max(%d,%d) format(%d)\n", cockpit_aircraft_name, cockpit_texture_width, cockpit_texture_height, cockpit_texture_format);
 	}
+	if ((cockpit_texture_width < 0 || cockpit_texture_width > MAX_TEXTURE_WIDTH || cockpit_texture_height < 0 || cockpit_texture_height > MAX_TEXTURE_HEIGHT)) {
+		log_printf("Read texture dimensions %dx%d is out of bounds 0x0..%dx%d\n", cockpit_texture_width, cockpit_texture_height, MAX_TEXTURE_WIDTH, MAX_TEXTURE_HEIGHT);
+		fclose(fp);
+		return;
+	}
 	cockpit_aircraft_known = true;
 
 	for (int i = 0; i < COCKPIT_MAX_WINDOWS; i++) {
