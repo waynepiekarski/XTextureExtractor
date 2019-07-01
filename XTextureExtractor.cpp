@@ -166,6 +166,13 @@ void process_debug_key(void *refCon) {
 }
 #endif
 
+int draw_callback(XPLMDrawingPhase inPhase, int inIsBefore, void *inRefcon) {
+	GLint bound_texture;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound_texture);
+	log_printf("draw_callback: phase=%d, before=%d, texid=%d, refcon=%p\n", inPhase, inIsBefore, bound_texture, inRefcon);
+	return 1; // Allow X-Plane to keep drawing
+}
+
 PLUGIN_API int XPluginStart(
 						char *		outName,
 						char *		outSig,
@@ -206,6 +213,12 @@ PLUGIN_API int XPluginStart(
 	XPLMRegisterCommandHandler(cmd_clear_button = XPLMCreateCommand("XTE/clear", "XTextureExtractor Clear"), handle_command, 1, "Clear");
 	XPLMRegisterCommandHandler(cmd_hide_button  = XPLMCreateCommand("XTE/hide", "XTextureExtractor Hide"),  handle_command, 1, "Hide");
 	XPLMRegisterCommandHandler(cmd_dump_button  = XPLMCreateCommand("XTE/dump", "XTextureExtractor Dump"),  handle_command, 1, "Dump");
+
+	for (int c = 0; c <= 55; c += 5) {
+		// XPLMRegisterDrawCallback(draw_callback, xplm_Phase_Gauges, 0, (void*)0x1234);
+		XPLMRegisterDrawCallback(draw_callback, c, 0, (void*)0x1234);
+		XPLMRegisterDrawCallback(draw_callback, c, 1, (void*)0x1234);
+	}
 
 	return 1;
 }
