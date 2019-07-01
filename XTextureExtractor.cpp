@@ -546,6 +546,7 @@ void load_window_state() {
 	cockpit_window_limit = 0;
 	cockpit_aircraft_known = false;
 	char texturefile[256];
+	char buffer[1024];
 	sprintf(texturefile, "%s\\%s.tex", plugin_path, cockpit_aircraft_filename);
 	FILE *fp = fopen(texturefile, "rb");
 	if (fp == NULL) {
@@ -554,7 +555,13 @@ void load_window_state() {
 	} else {
 		log_printf("Loading XTextureExtractor state from %s\n", texturefile);
 	}
-	if (fscanf(fp, "%s %d %d %d", cockpit_aircraft_name, &cockpit_texture_width, &cockpit_texture_height, &cockpit_texture_format) != 4) {
+	char *result = fgets(buffer, 1024, fp);
+	if (result == NULL) {
+		log_printf("Failed to read first line from file, aborting reading\n");
+		fclose(fp);
+		return;
+	}
+	if (sscanf(buffer, "%s %d %d %d", cockpit_aircraft_name, &cockpit_texture_width, &cockpit_texture_height, &cockpit_texture_format) != 4) {
 		log_printf("Failed to read texture description from file, aborting reading\n");
 		fclose(fp);
 		return;
@@ -568,15 +575,26 @@ void load_window_state() {
 	}
 	cockpit_aircraft_known = true;
 
-	for (int i = 0; i < COCKPIT_MAX_WINDOWS; i++) {
-		if (fscanf(fp, "%s %d %d %d %d", _g_window_name[i], &_g_texture_lbrt[i][0], &_g_texture_lbrt[i][1], &_g_texture_lbrt[i][2], &_g_texture_lbrt[i][3]) != 5) {
-			log_printf("Reached EOF, finished reading with %d successful textures\n", cockpit_window_limit);
+	int i = 0;
+	while (i < COCKPIT_MAX_WINDOWS) {
+		char *result = fgets(buffer, 1024, fp);
+		if (result == NULL) {
+			log_printf("fgets returned NULL, finished reading with %d successful textures\n", cockpit_window_limit);
 			break;
 		}
-		else {
-			log_printf("Read in %d = [%s] LBRT=%d, %d, %d, %d\n", i, _g_window_name[i], _g_texture_lbrt[i][0], _g_texture_lbrt[i][1], _g_texture_lbrt[i][2], _g_texture_lbrt[i][3]);
-			cockpit_window_limit = i + 1;
+		if (result[0] == '#') {
+			// Skip commented out line
+			log_printf("Skipping line [%s]\n", buffer);
+			continue;
 		}
+		
+		if (sscanf(buffer, "%s %d %d %d %d", _g_window_name[i], &_g_texture_lbrt[i][0], &_g_texture_lbrt[i][1], &_g_texture_lbrt[i][2], &_g_texture_lbrt[i][3]) != 5) {
+			log_printf("Reached failed sscanf read [%s], finished reading with %d successful textures\n", buffer, cockpit_window_limit);
+			break;
+		}
+		log_printf("Read in %d = [%s] LBRT=%d, %d, %d, %d\n", i, _g_window_name[i], _g_texture_lbrt[i][0], _g_texture_lbrt[i][1], _g_texture_lbrt[i][2], _g_texture_lbrt[i][3]);
+		cockpit_window_limit = i + 1;
+		i++;
 	}
 	fclose(fp);
 
