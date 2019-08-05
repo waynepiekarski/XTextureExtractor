@@ -34,8 +34,6 @@ GLint cockpit_texture_id = 0;
 GLint cockpit_texture_width = -1;
 GLint cockpit_texture_height = -1;
 GLint cockpit_texture_format = -1;
-GLint cockpit_texture_last = 3000; // This is the starting point for our texture search, it needs to be higher than any texture id and I can't query for it
-GLint cockpit_texture_jump = 1000; // Whenever the aircraft switches, bump up the last texture id, because this plugin seems to cause texture ids to exceed, not sure what the limit is here
 int   cockpit_texture_seq = -1;     // Increment this each time we change aircraft or textures, so we can restart the network connection
 bool  cockpit_dirty = false;
 bool  cockpit_aircraft_known = false;
@@ -258,7 +256,6 @@ PLUGIN_API int XPluginEnable(void) {
 		log_printf("Plugin was previously disabled, re-enabling it\n");
 		plugin_disabled = false;
 		cockpit_dirty = true;
-		cockpit_texture_last += cockpit_texture_jump;
 		load_window_state();
 	}
 	return 1;
@@ -269,9 +266,8 @@ PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFrom, int inMsg, void * inP
 	// log_printf("XPluginReceiveMessage XTextureExtractor: inFrom=%d, inMsg=%d, inParam=%p\n", inFrom, inMsg, inParam);
 	if (inMsg == 103) {
 		// Seems like 103 is sent just when the aircraft is finished loading, we can try grabbing the texture here
-		log_printf("XPluginReceiveMessage: Found event inMsg=103, lets try to load window properties and increasing last texture id by %d to %d\n", cockpit_texture_jump, cockpit_texture_last + cockpit_texture_jump);
+		log_printf("XPluginReceiveMessage: Found event inMsg=103, aircraft is loaded, lets try to load window properties\n");
 		cockpit_dirty = true;
-		cockpit_texture_last += cockpit_texture_jump;
 		load_window_state();
 	}
 }
@@ -332,24 +328,7 @@ void save_png(GLint texId)
 
 void dump_debug()
 {
-	int tw, th, tf;
-	log_printf("Dump request, searching for %dx%d textures for %s\n", cockpit_texture_width, cockpit_texture_height, cockpit_aircraft_filename);
-
-	for (int i = 0; i < cockpit_texture_last; i++) {
-		XPLMBindTexture2d(i, 0);
-		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &tw);
-		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &th);
-		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &tf);
-
-		// XP737 panel is "fbo-list panel texture 1-fbo" at 2048x1024
-		// FF7*7 panel is "fbo-list panel texture 1-fbo" at 2048x2048
-		// ZB738 panel is "fbo-list panel texture 1-fbo" at 2048x2048
-		if ((tw == cockpit_texture_width) && (th == cockpit_texture_height)) {
-			log_printf("texture id=%d, width=%d, height=%d iformat=%d\n", i, tw, th, tf);
-		}
-	}
-
-	log_printf("Saving texture for id %d\n", cockpit_texture_id);
+	log_printf("Dumping out texture for id %d\n", cockpit_texture_id);
 	save_png(cockpit_texture_id);
 }
 
