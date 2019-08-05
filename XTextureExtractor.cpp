@@ -163,6 +163,8 @@ XPLMCommandRef cmd_save_button = NULL;
 XPLMCommandRef cmd_clear_button = NULL;
 XPLMCommandRef cmd_hide_button = NULL;
 XPLMCommandRef cmd_dump_button = NULL;
+XPLMCommandRef cmd_next_button = NULL;
+XPLMCommandRef cmd_prev_button = NULL;
 
 char _g_window_name[COCKPIT_MAX_WINDOWS][256];  // titles of each window
 int _g_texture_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
@@ -220,6 +222,8 @@ PLUGIN_API int XPluginStart(
 	XPLMRegisterCommandHandler(cmd_clear_button = XPLMCreateCommand("XTE/clear", "XTextureExtractor Clear"), handle_command, 1, "Clear");
 	XPLMRegisterCommandHandler(cmd_hide_button  = XPLMCreateCommand("XTE/hide", "XTextureExtractor Hide"),  handle_command, 1, "Hide");
 	XPLMRegisterCommandHandler(cmd_dump_button  = XPLMCreateCommand("XTE/dump", "XTextureExtractor Dump"),  handle_command, 1, "Dump");
+	XPLMRegisterCommandHandler(cmd_next_button = XPLMCreateCommand("XTE/next", "XTextureExtractor Next"), handle_command, 1, "Next");
+	XPLMRegisterCommandHandler(cmd_prev_button = XPLMCreateCommand("XTE/prev", "XTextureExtractor Prev"), handle_command, 1, "Prev");
 
 	return 1;
 }
@@ -242,6 +246,8 @@ PLUGIN_API void	XPluginStop(void)
 	if (cmd_clear_button != NULL) XPLMUnregisterCommandHandler(cmd_clear_button, handle_command, 0, 0); cmd_clear_button = NULL;
 	if (cmd_hide_button != NULL) XPLMUnregisterCommandHandler(cmd_hide_button, handle_command, 0, 0); cmd_hide_button = NULL;
 	if (cmd_dump_button != NULL) XPLMUnregisterCommandHandler(cmd_dump_button, handle_command, 0, 0); cmd_dump_button = NULL;
+	if (cmd_next_button != NULL) XPLMUnregisterCommandHandler(cmd_next_button, handle_command, 0, 0); cmd_next_button = NULL;
+	if (cmd_prev_button != NULL) XPLMUnregisterCommandHandler(cmd_prev_button, handle_command, 0, 0); cmd_prev_button = NULL;
 }
 
 bool plugin_disabled = false;
@@ -732,6 +738,17 @@ int handle_command(XPLMCommandRef cmd_id, XPLMCommandPhase phase, void * in_refc
 		}
 		else if (cmd_id == cmd_dump_button) {
 			dump_debug();
+		}
+		else if (cmd_id == cmd_next_button) {
+			cockpit_texture_id++;
+			log_printf("Set cockpit_texture_id to %d\n", cockpit_texture_id);
+		}
+		else if (cmd_id == cmd_prev_button) {
+			cockpit_texture_id--;
+			if (cockpit_texture_id < 0) {
+				cockpit_texture_id = 0;
+			}
+			log_printf("Set cockpit_texture_id to %d\n", cockpit_texture_id);
 		}
 		else {
 			log_printf("Ignoring unknown command\n");
