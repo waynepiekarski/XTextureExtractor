@@ -166,10 +166,25 @@ void process_debug_key(void *refCon) {
 }
 #endif
 
+GLint candidate_texid = -1;
+GLint probable_texid = -1;
+
 int draw_callback(XPLMDrawingPhase inPhase, int inIsBefore, void *inRefcon) {
 	GLint bound_texture;
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound_texture);
-	log_printf("draw_callback: phase=%d, before=%d, texid=%d, refcon=%p\n", inPhase, inIsBefore, bound_texture, inRefcon);
+	// log_printf("draw_callback: phase=%d, before=%d, texid=%d, refcon=%p\n", inPhase, inIsBefore, bound_texture, inRefcon);
+	// Phase information from http://www.xsquawkbox.net/xpsdk/mediawiki/XPLMDrawingPhase
+	if ((inPhase == 40) && (inIsBefore == 0)) { // xplm_Phase_Panel=40
+		// Phase 40 happens many times in a render pass, so always keep the latest value, this is not the texture
+		// value but happens to always be one off from the correct value.
+		candidate_texid = bound_texture;
+		log_printf("Candidate texture id = %d\n", candidate_texid);
+	}
+	else if ((inPhase == 0) && (inIsBefore == 0)) { // xplm_Phase_FirstScene=0
+		// Phase 0 implies the last render has finished, so the last texture kept is the true texture id but off by one
+		probable_texid = candidate_texid + 1;
+		log_printf("Found probable texture id = %d\n", probable_texid);
+	}
 	return 1; // Allow X-Plane to keep drawing
 }
 
