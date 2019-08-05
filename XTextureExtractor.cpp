@@ -540,10 +540,15 @@ void load_window_state() {
 	FILE *fp = fopen(texturefile, "rb");
 	if (fp == NULL) {
 		log_printf("Could not load texture data from file %s, this aircraft is unknown\n", texturefile);
-		return;
-	} else {
-		log_printf("Loading XTextureExtractor state from %s\n", texturefile);
+		sprintf(texturefile, "%s\\%s.tex", plugin_path, "unknown");
+		fp = fopen(texturefile, "rb");
+		if (fp == NULL) {
+			log_printf("Could not open generic data file %s, giving up\n", texturefile);
+			return;
+		}
 	}
+	log_printf("Loading XTextureExtractor state from %s\n", texturefile);
+
 	char *result = fgets(buffer, 1024, fp);
 	if (result == NULL) {
 		log_printf("Failed to read first line from file, aborting reading\n");
