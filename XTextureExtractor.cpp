@@ -44,8 +44,6 @@ char  cockpit_aircraft_filename[256];
 char  plugin_path[MAX_PATH];
 int   cockpit_save_count = 0;
 char  cockpit_save_string[32];
-int   cockpit_scan_count = 0;
-char  cockpit_scan_string[32];
 int   cockpit_window_limit = 0;
 
 
@@ -86,39 +84,60 @@ void detect_aircraft_filename(void) {
 
 int network_started = false;
 
-static void find_last_match_in_texture(GLint start_texture_id)
-{
-	if (start_texture_id <= 0) {
-		start_texture_id = cockpit_texture_last;
-		cockpit_scan_count = -1;
-	}
-	else {
-		cockpit_scan_count--;
-	}
-	sprintf(cockpit_scan_string, "<<%d", cockpit_scan_count);
 
-	log_printf("Finding last texture from %d (max=%d) that matches fw=%d, fh=%d, ff=%d for aircraft %s\n", start_texture_id, cockpit_texture_last, cockpit_texture_width, cockpit_texture_height, cockpit_texture_format, cockpit_aircraft_filename);
-	int tw, th, tf;
-	for (int i = start_texture_id; i >= 0; i--) {
-		XPLMBindTexture2d(i, 0);
+GLint scan_candidate_texid = -1;
+
+int draw_callback(XPLMDrawingPhase inPhase, int inIsBefore, void *inRefcon) {
+	GLint bound_texture;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound_texture);
+	// log_printf("draw_callback: phase=%d, before=%d, texid=%d, refcon=%p\n", inPhase, inIsBefore, bound_texture, inRefcon);
+	// Phase information from http://www.xsquawkbox.net/xpsdk/mediawiki/XPLMDrawingPhase
+	if ((inPhase == 40) && (inIsBefore == 0)) { // xplm_Phase_Panel=40
+												// Phase 40 happens many times in a render pass, so always keep the latest value, this is not the texture
+												// value but happens to always be one off from the correct value.
+		scan_candidate_texid = bound_texture;
+		log_printf("Candidate texture id = %d\n", scan_candidate_texid);
+	}
+	else if ((inPhase == 0) && (inIsBefore == 0) && (scan_candidate_texid > 0)) { // xplm_Phase_FirstScene=0
+		// Phase 0 implies the last render has finished, so the last texture kept is the true texture id but off by one.
+		// Note that we only enter this code once we have received at least one phase 40 callback!
+		cockpit_texture_id = scan_candidate_texid + 1;
+		log_printf("Found panel texture id +1 = %d\n", cockpit_texture_id);
+
+		// Stop receiving phase callbacks
+		XPLMUnregisterDrawCallback(draw_callback, 0, 0, NULL);
+		XPLMUnregisterDrawCallback(draw_callback, 40, 0, NULL);
+		
+		// Tell the networking code that the texture has been changed
+		cockpit_texture_seq++;
+		if (!network_started) {
+			log_printf("Texture is found, starting network thread to listen for XTextureExtractor clients\n");
+			start_networking_thread();
+			network_started = true;
+		}
+
+		// Double check this is correct
+		int tw, th, tf;
+		XPLMBindTexture2d(cockpit_texture_id, 0);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &tw);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &th);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &tf);
-		if ((tw == cockpit_texture_width) && (th == cockpit_texture_height) && (tf == cockpit_texture_format)) {
-			log_printf("Found texture id=%d, width=%d, height=%d, internal format == %d\n", i, tw, th, tf);
-			cockpit_texture_id = i;
-
-			if (!network_started) {
-				log_printf("Texture is found, starting network thread to listen for XTextureExtractor clients\n");
-				start_networking_thread();
-				network_started = true;
-			}
-
-			return;
+		if ((tw != cockpit_texture_width) || (th != cockpit_texture_height) || (tf != cockpit_texture_format)) {
+			log_printf("Error! Mismatch texture id=%d, width=%d!=%d, height=%d!=%d, internal format=%d!=%d\n", cockpit_texture_id, tw, cockpit_texture_width, th, cockpit_texture_height, tf, cockpit_texture_format);
 		}
 	}
-	cockpit_texture_id = 0;
-	log_printf("Did not find matching texture, using id 0 instead\n");
+	return 1; // Allow X-Plane to keep drawing
+}
+
+
+static void scan_for_texture(void)
+{
+	// Register callbacks for drawing phase 40 and 0, so we can grab the texture id.
+	// We will get a number of 40s, and then a 0 to indicate the next render.
+	scan_candidate_texid = -1;
+	XPLMRegisterDrawCallback(draw_callback,  0, 0, NULL);
+	XPLMRegisterDrawCallback(draw_callback, 40, 0, NULL);
+	log_printf("Scheduling texture scan on next rendering pass\n");
 }
 
 
@@ -134,7 +153,6 @@ void				dummy_key_handler(XPLMWindowID in_window_id, char key, XPLMKeyFlags flag
 
 static int _g_pop_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_texture_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
-static int _g_scan_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_load_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_save_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_clear_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
@@ -142,7 +160,6 @@ static int _g_hide_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, 
 static int _g_dump_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 
 XPLMCommandRef cmd_texture_button = NULL;
-XPLMCommandRef cmd_scan_button = NULL;
 XPLMCommandRef cmd_load_button = NULL;
 XPLMCommandRef cmd_save_button = NULL;
 XPLMCommandRef cmd_clear_button = NULL;
@@ -166,27 +183,6 @@ void process_debug_key(void *refCon) {
 }
 #endif
 
-GLint candidate_texid = -1;
-GLint probable_texid = -1;
-
-int draw_callback(XPLMDrawingPhase inPhase, int inIsBefore, void *inRefcon) {
-	GLint bound_texture;
-	glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound_texture);
-	// log_printf("draw_callback: phase=%d, before=%d, texid=%d, refcon=%p\n", inPhase, inIsBefore, bound_texture, inRefcon);
-	// Phase information from http://www.xsquawkbox.net/xpsdk/mediawiki/XPLMDrawingPhase
-	if ((inPhase == 40) && (inIsBefore == 0)) { // xplm_Phase_Panel=40
-		// Phase 40 happens many times in a render pass, so always keep the latest value, this is not the texture
-		// value but happens to always be one off from the correct value.
-		candidate_texid = bound_texture;
-		log_printf("Candidate texture id = %d\n", candidate_texid);
-	}
-	else if ((inPhase == 0) && (inIsBefore == 0)) { // xplm_Phase_FirstScene=0
-		// Phase 0 implies the last render has finished, so the last texture kept is the true texture id but off by one
-		probable_texid = candidate_texid + 1;
-		log_printf("Found probable texture id = %d\n", probable_texid);
-	}
-	return 1; // Allow X-Plane to keep drawing
-}
 
 PLUGIN_API int XPluginStart(
 						char *		outName,
@@ -212,7 +208,6 @@ PLUGIN_API int XPluginStart(
 
 	// Global save button that increments each time
 	strcpy(cockpit_save_string, "Sv");
-	strcpy(cockpit_scan_string, "<<X");
 
 	// Implement a debugging key if we need it
 #ifdef DEBUG_KEYPRESS
@@ -222,18 +217,11 @@ PLUGIN_API int XPluginStart(
 
 	// Implement commands for all the buttons we support
 	XPLMRegisterCommandHandler(cmd_texture_button = XPLMCreateCommand("XTE/newscan", "XTextureExtractor New Scan"), handle_command, 1, "New Scan");
-	XPLMRegisterCommandHandler(cmd_scan_button  = XPLMCreateCommand("XTE/scan", "XTextureExtractor Scan"),  handle_command, 1, "Scan");
 	XPLMRegisterCommandHandler(cmd_load_button  = XPLMCreateCommand("XTE/load", "XTextureExtractor Load"),  handle_command, 1, "Load");
 	XPLMRegisterCommandHandler(cmd_save_button  = XPLMCreateCommand("XTE/save", "XTextureExtractor Save"),  handle_command, 1, "Save");
 	XPLMRegisterCommandHandler(cmd_clear_button = XPLMCreateCommand("XTE/clear", "XTextureExtractor Clear"), handle_command, 1, "Clear");
 	XPLMRegisterCommandHandler(cmd_hide_button  = XPLMCreateCommand("XTE/hide", "XTextureExtractor Hide"),  handle_command, 1, "Hide");
 	XPLMRegisterCommandHandler(cmd_dump_button  = XPLMCreateCommand("XTE/dump", "XTextureExtractor Dump"),  handle_command, 1, "Dump");
-
-	for (int c = 0; c <= 55; c += 5) {
-		// XPLMRegisterDrawCallback(draw_callback, xplm_Phase_Gauges, 0, (void*)0x1234);
-		XPLMRegisterDrawCallback(draw_callback, c, 0, (void*)0x1234);
-		XPLMRegisterDrawCallback(draw_callback, c, 1, (void*)0x1234);
-	}
 
 	return 1;
 }
@@ -251,7 +239,6 @@ PLUGIN_API void	XPluginStop(void)
 	}
 
 	if (cmd_texture_button != NULL) XPLMUnregisterCommandHandler(cmd_texture_button, handle_command, 0, 0); cmd_texture_button = NULL;
-	if (cmd_scan_button != NULL) XPLMUnregisterCommandHandler(cmd_scan_button, handle_command, 0, 0); cmd_scan_button = NULL;
 	if (cmd_load_button != NULL) XPLMUnregisterCommandHandler(cmd_load_button, handle_command, 0, 0); cmd_load_button = NULL;
 	if (cmd_save_button != NULL) XPLMUnregisterCommandHandler(cmd_save_button, handle_command, 0, 0); cmd_save_button = NULL;
 	if (cmd_clear_button != NULL) XPLMUnregisterCommandHandler(cmd_clear_button, handle_command, 0, 0); cmd_clear_button = NULL;
@@ -410,7 +397,6 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 	intptr_t win_num = (intptr_t)in_refcon;
 	int *g_pop_button_lbrt = &_g_pop_button_lbrt[win_num][0];
 	int *g_texture_button_lbrt = &_g_texture_button_lbrt[win_num][0];
-	int *g_scan_button_lbrt = &_g_scan_button_lbrt[win_num][0];
 	int *g_save_button_lbrt = &_g_save_button_lbrt[win_num][0];
 	int *g_load_button_lbrt = &_g_load_button_lbrt[win_num][0];
 	int *g_clear_button_lbrt = &_g_clear_button_lbrt[win_num][0];
@@ -432,8 +418,7 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 
 #define DEFINE_BOX(_array, _left, _string) _array[0] = _left[2] + 10, _array[1] = _left[1], _array[2] = _array[0] + (int)XPLMMeasureString(xplmFont_Proportional, _string, (int)strlen(_string)), _array[3] = _left[3]
 		DEFINE_BOX(g_texture_button_lbrt, g_pop_button_lbrt, texture_info_text);
-		DEFINE_BOX(g_scan_button_lbrt, g_texture_button_lbrt, cockpit_scan_string);
-		DEFINE_BOX(g_load_button_lbrt, g_scan_button_lbrt, "Ld");
+		DEFINE_BOX(g_load_button_lbrt, g_texture_button_lbrt, "Ld");
 		DEFINE_BOX(g_save_button_lbrt, g_load_button_lbrt, cockpit_save_string);
 		DEFINE_BOX(g_clear_button_lbrt, g_save_button_lbrt, "Clr");
 		DEFINE_BOX(g_hide_button_lbrt, g_clear_button_lbrt, "H");
@@ -446,7 +431,6 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 #define DRAW_BOX(_array) glBegin(GL_LINE_LOOP), glVertex2i(_array[0], _array[3]), glVertex2i(_array[2], _array[3]), glVertex2i(_array[2], _array[1]), glVertex2i(_array[0], _array[1]), glEnd()
 		DRAW_BOX(g_pop_button_lbrt);
 		DRAW_BOX(g_texture_button_lbrt);
-		DRAW_BOX(g_scan_button_lbrt);
 		DRAW_BOX(g_load_button_lbrt);
 		DRAW_BOX(g_save_button_lbrt);
 		DRAW_BOX(g_clear_button_lbrt);
@@ -461,7 +445,6 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		XPLMDrawString(col_white, g_texture_button_lbrt[0], g_texture_button_lbrt[1] + 4, (char *)texture_info_text, NULL, xplmFont_Proportional);
 
 		// Draw the load/save/clear text
-		XPLMDrawString(col_white, g_scan_button_lbrt[0],  g_scan_button_lbrt[1] + 4, (char *)cockpit_scan_string, NULL, xplmFont_Proportional);
 		XPLMDrawString(col_white, g_load_button_lbrt[0],  g_load_button_lbrt[1]  + 4, (char *)"Ld", NULL, xplmFont_Proportional);
 		XPLMDrawString(col_white, g_save_button_lbrt[0],  g_save_button_lbrt[1]  + 4, (char *)cockpit_save_string, NULL, xplmFont_Proportional);
 		XPLMDrawString(col_white, g_clear_button_lbrt[0], g_clear_button_lbrt[1] + 4, (char *)"Clr", NULL, xplmFont_Proportional);
@@ -481,8 +464,7 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 
 	if (cockpit_dirty) {
 		log_printf("Detected aircraft dirty flag set, so finding texture\n");
-		find_last_match_in_texture(-1);
-		cockpit_texture_seq++;
+		scan_for_texture();
 		cockpit_dirty = false;
 	}
 
@@ -708,12 +690,8 @@ int	handle_mouse(XPLMWindowID in_window_id, int x, int y, XPLMMouseStatus is_dow
 		}
 		else if(coord_in_rect(x, y, _g_texture_button_lbrt[win_num])) // user clicked the "texture info button" button
 		{
-			// Rescan from the top for the best texture, this usually works
-			find_last_match_in_texture(-1);
-		}
-		else if (coord_in_rect(x, y, _g_scan_button_lbrt[win_num])) {
-			// Resume from the current texture, this is when the default algorithm fails but is very rare
-			find_last_match_in_texture(cockpit_texture_id - 1);
+			// Shouldn't ever need to manually initiate a scan
+			scan_for_texture();
 		}
 		else if (coord_in_rect(x, y, _g_load_button_lbrt[win_num])) {
 			load_window_state();
@@ -750,13 +728,9 @@ int handle_command(XPLMCommandRef cmd_id, XPLMCommandPhase phase, void * in_refc
 	if (phase == xplm_CommandEnd)
 	{
 		log_printf("Found incoming command %p with reference [%s]\n", cmd_id, (char *)in_refcon);
-		if (cmd_id == cmd_texture_button) { // user clicked the "texture info button" button
-			// Rescan from the top for the best texture, this usually works
-			find_last_match_in_texture(-1);
-		}
-		else if (cmd_id == cmd_scan_button) {
-			// Resume from the current texture, this is when the default algorithm fails but is very rare
-			find_last_match_in_texture(cockpit_texture_id - 1);
+		if (cmd_id == cmd_texture_button) {
+			// Shouldn't ever need to manually initiate a scan
+			scan_for_texture();
 		}
 		else if (cmd_id == cmd_load_button) {
 			load_window_state();
