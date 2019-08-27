@@ -43,6 +43,7 @@ public class XTextureExtractor extends JFrame {
     public JLabel mLabel;
     public JFrame mFrame;
     static public int windowActive = -1;
+    static public int screenNumber = 0;
     static public boolean windowFullscreen = false;
     static public boolean windowGeometry = false;
     static public int windowGeometryX, windowGeometryY, windowGeometryW, windowGeometryH;
@@ -57,6 +58,9 @@ public class XTextureExtractor extends JFrame {
         mFrame = this;
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setTitle("XTextureExtractor");
+        
+        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        GraphicsDevice[] gs = ge.getScreenDevices();
 
         if (windowGeometry) {
             setUndecorated(true);
@@ -68,6 +72,13 @@ public class XTextureExtractor extends JFrame {
         if (windowFullscreen) {
             setExtendedState(JFrame.MAXIMIZED_BOTH);
             setUndecorated(true);
+            
+            if (screenNumber <= (gs.length - 1) && screenNumber > 0) {
+                JFrame dummy = new JFrame(gs[screenNumber].getDefaultConfiguration());
+                setLocationRelativeTo(dummy);
+                dummy.dispose();
+            }
+            
             setVisible(true);
             System.err.println("Fullscreen frame is " + mFrame.getWidth() + "x" + mFrame.getHeight());
         }
@@ -311,7 +322,7 @@ public class XTextureExtractor extends JFrame {
     public static void usage(String reason) {
         System.err.println("Error: " + reason);
         System.err.println("XTextureExtractor, streams PNGs from port " + TCP_PORT);
-	System.err.println("Usage: <hostname> [--fullscreen] [--windowN] [--geometry=X,Y,W,H]");
+	System.err.println("Usage: <hostname> [--fullscreen] [--windowN] [--geometry=X,Y,W,H] [--screenN]");
     }
 
     public static void main(String[] args) {
@@ -341,6 +352,11 @@ public class XTextureExtractor extends JFrame {
                 windowGeometryH = Integer.parseInt(g[3]);
                 System.err.println("Decoded manual geometry X=" + windowGeometryX + " Y=" + windowGeometryY + " W=" + windowGeometryW + " H=" + windowGeometryH);
                 windowGeometry = true;
+                iter.remove();
+            } else if (s.startsWith("--screen")) {
+                s = s.substring("--screen".length());
+                screenNumber = Integer.parseInt(s);
+                System.err.println("Specify screen number " + screenNumber);
                 iter.remove();
             } else {
                 System.err.println("Leaving argument " + s);
