@@ -39,10 +39,9 @@ object Const {
     fun getBuildDateTime(): String {
         if (_datetime != null)
             return _datetime!!
-        // Convert integer value YYMMDDHHMM into string
+        // Convert integer value **YYMMDDHH into string, cannot exceed Google Play maximum of 2100000000
         var c = getBuildId()
-        val min = c % 100
-        c /= 100
+        val min = 0
         val hrs = c % 100
         c /= 100
         val day = c % 100
@@ -50,7 +49,7 @@ object Const {
         val monthStr = arrayOf("N/A", "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
         val mon = monthStr[c % 100]
         c /= 100
-        val year = c
+        val year = c % 100
         _datetime = "20%02d-%s-%02d %02d:%02d".format(year, mon, day, hrs, min)
         return _datetime!!
     }
