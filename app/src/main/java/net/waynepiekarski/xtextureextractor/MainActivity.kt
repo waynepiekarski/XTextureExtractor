@@ -255,7 +255,7 @@ open class MainActivity : Activity(), TCPBitmapClient.OnTCPBitmapEvent, Multicas
 
         // Retrieve the manual address from shared preferences
         val sharedPref = getPreferences(Context.MODE_PRIVATE)
-        val prefAddress = sharedPref.getString("manual_address", "")
+        val prefAddress = sharedPref.getString("manual_address", "").orEmpty()
         window1Idx = sharedPref.getInt("window_1_idx", 0)
         window2Idx = sharedPref.getInt("window_2_idx", 1)
         Log.d(Const.TAG, "Found preferences value for manual_address = [$prefAddress]")
