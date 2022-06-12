@@ -22,6 +22,7 @@
 
 #pragma once
 
+// XPLM version #defines are in the vcproj file
 #include "XPLMDisplay.h"
 #include "XPLMGraphics.h"
 #include "XPLMUtilities.h"
@@ -40,9 +41,8 @@
 #else
 #include <GL/gl.h>
 #endif
-
-#ifndef XPLM300
-#error This is made to be compiled against the XPLM300 SDK
+#ifndef XPLM301
+#error This is made to be compiled against the XPLM301 SDK
 #endif
 
 static char __log_printf_buffer[4096];
