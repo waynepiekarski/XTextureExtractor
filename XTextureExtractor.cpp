@@ -41,6 +41,8 @@ bool  cockpit_dirty = false;
 bool  cockpit_aircraft_known = false;
 char  cockpit_aircraft_name[256];
 char  cockpit_aircraft_filename[256];
+int   cockpit_panel_width = -1;
+int   cockpit_panel_height = -1;
 char  plugin_path[MAX_PATH];
 int   cockpit_save_count = 0;
 char  cockpit_save_string[32];
@@ -49,13 +51,53 @@ char  cockpit_scan_string[32];
 int   cockpit_window_limit = 0;
 
 
+void detect_aircraft_panel(char* acfpath) {
+	log_printf("Finding panel texture for ACF path [%s]\n", acfpath);
+	char* path = acfpath;
+	char *slash = strrchr(path, '\\');
+	if (slash == NULL) {
+		log_printf("Could not find ending backslash in [%s]\n", acfpath);
+		return;
+	}
+	*slash = '\0';
+
+	cockpit_panel_width = -1;
+	cockpit_panel_height = -1;
+	std::vector<const char*> dirs = { "cockpit_3d/-PANELS-", "cockpit/-PANELS-" };
+	std::vector<const char*> names = { "panel.png", "Panel_General.png", "Panel_Airliner.png", "Panel_Fighter.png", "Panel_Glider.png", "Panel_Helo.png", "Panel_Autogyro.png", "Panel_General_IFR.png", "Panel_Autogyro_Twin.png", "Panel_Fighter_IFR.png" };
+	for (const char* d : dirs) {
+		for (const char* n : names) {
+			std::string testpath;
+			testpath += path;
+			testpath += "/";
+			testpath += d;
+			testpath += "/";
+			testpath += n;
+
+			log_printf("Testing for panel texture file [%s]\n", testpath.c_str());
+			std::vector<unsigned char> image;
+			unsigned width, height;
+			unsigned error = lodepng::decode(image, width, height, testpath.c_str());
+			if (!error) {
+				log_printf("Found panel texture [%s] with resolution %d x %d\n", testpath.c_str(), width, height);
+				cockpit_panel_width = width;
+				cockpit_panel_height = height;
+				return;
+			}
+		}
+	}
+	log_printf("Failed to find panel texture in [%s]\n", path);
+}
+
 void detect_aircraft_filename(void) {
+	// https://developer.x-plane.com/sdk/XPLMGetNthAircraftModel/ defines filename as 256 and path as 512
 	char filename[256];
-	char path[256];
+	char path[512];
 	char tailnum[256];
 	XPLMGetNthAircraftModel(XPLM_USER_AIRCRAFT, filename, path);
 	_strlwr(filename);
 	_strlwr(path);
+	detect_aircraft_panel(path);
 
 	int result;
 	if (gAcfTailnum == NULL) {
@@ -541,7 +583,7 @@ void load_window_state() {
 		}
 	}
 
-	// Detect the type of aircraft and load in the name to cockpit_aircraft_filename
+	// Detect the type of aircraft and load in the name to cockpit_aircraft_filename, also find the -PANELS- texture and get the size
 	detect_aircraft_filename();
 
 	// Read in the new aircraft configuration file
@@ -563,13 +605,18 @@ void load_window_state() {
 		fclose(fp);
 		return;
 	}
-	if (sscanf(buffer, "%s %d %d %d", cockpit_aircraft_name, &cockpit_texture_width, &cockpit_texture_height, &cockpit_texture_format) != 4) {
+	// Previously we required the texture width, height, and format but we now extract this from -PANELS- automatically. But still
+	// allow these extra values to be present in the file without an error condition for backwards compatibility.
+	if (sscanf(buffer, "%s", cockpit_aircraft_name) != 1) {
 		log_printf("Failed to read texture description from file, aborting reading\n");
 		fclose(fp);
 		return;
-	} else {
-		log_printf("Read in [%s] = max(%d,%d) format(%d)\n", cockpit_aircraft_name, cockpit_texture_width, cockpit_texture_height, cockpit_texture_format);
 	}
+	cockpit_texture_width = cockpit_panel_width;
+	cockpit_texture_height = cockpit_panel_height;
+	cockpit_texture_format = 32856; // All panel textures always have this format, so just hard code it
+	log_printf("Read in [%s] = max(%d,%d) format(%d)\n", cockpit_aircraft_name, cockpit_texture_width, cockpit_texture_height, cockpit_texture_format);
+
 	if ((cockpit_texture_width < 0 || cockpit_texture_width > MAX_TEXTURE_WIDTH || cockpit_texture_height < 0 || cockpit_texture_height > MAX_TEXTURE_HEIGHT)) {
 		log_printf("Read texture dimensions %dx%d is out of bounds 0x0..%dx%d\n", cockpit_texture_width, cockpit_texture_height, MAX_TEXTURE_WIDTH, MAX_TEXTURE_HEIGHT);
 		fclose(fp);
