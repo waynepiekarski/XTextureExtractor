@@ -128,6 +128,34 @@ void detect_aircraft_filename(void) {
 
 int network_started = false;
 
+void draw_panel_colors(void)
+{
+	XPLMSetGraphicsState(
+		0 /* no fog */,
+		0 /* no texture units so we can render colors */,
+		0 /* no lighting */,
+		0 /* no alpha testing */,
+		0 /* do alpha blend */,
+		0 /* do depth testing */,
+		0 /* no depth writing */
+	);
+	log_printf("Drawing colored blocks to the panel\n");
+	// Draw polygons in anti-clockwise order, with 0,0 at bottom-left and units in panel pixel width x height
+#define DRAW_2D_POLYGON(left, top, right, bottom) glBegin(GL_POLYGON); glVertex2i(left, top); glVertex2i(left, bottom); glVertex2i(right, bottom); glVertex2i(right, top); glEnd();
+
+	// Draw some colored blocks that we will look for when scanning the textures
+	glColor4f(1.0, 0.0, 1.0, 1.0); DRAW_2D_POLYGON(0, 0, cockpit_texture_width - 1, cockpit_texture_height - 1); // Magenta
+	glColor4f(1.0, 0.0, 0.0, 1.0); DRAW_2D_POLYGON(  0,   0, 255, 255); // Red
+	glColor4f(0.0, 1.0, 0.0, 1.0); DRAW_2D_POLYGON(256,   0, 511, 255); // Green
+	glColor4f(0.0, 0.0, 1.0, 1.0); DRAW_2D_POLYGON(  0, 256, 255, 511); // Blue
+	glColor4f(0.5, 0.5, 0.5, 1.0); DRAW_2D_POLYGON(256, 256, 511, 511); // Gray
+}
+
+int panel_callback(XPLMDrawingPhase inPhase, int inIsBefore, void *inRefcon) {
+	draw_panel_colors();
+	return 1;
+}
+
 static void find_last_match_in_texture(GLint start_texture_id)
 {
 	if (start_texture_id <= 0) {
@@ -138,6 +166,12 @@ static void find_last_match_in_texture(GLint start_texture_id)
 		cockpit_scan_count--;
 	}
 	sprintf(cockpit_scan_string, "<<%d", cockpit_scan_count);
+
+	// Draw colors to the texture to make it possible to detect.
+	// xplm_Phase_Panel draws before the aircraft draws over the top
+	// xplm_Phase_Gauges draws after the aircraft but this is not what you get when you read the PNG texture when it is done in the 2D window callback
+	log_printf("Enabling texture draw pattern for detection");
+	XPLMRegisterDrawCallback(panel_callback, xplm_Phase_Panel, 1, NULL);
 
 	log_printf("Finding last texture from %d (max=%d) that matches fw=%d, fh=%d, ff=%d for aircraft %s\n", start_texture_id, cockpit_texture_last, cockpit_texture_width, cockpit_texture_height, cockpit_texture_format, cockpit_aircraft_filename);
 	int tw, th, tf;
