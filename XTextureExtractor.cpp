@@ -43,6 +43,7 @@ char  cockpit_aircraft_name[256];
 char  cockpit_aircraft_filename[256];
 int   cockpit_panel_width = -1;
 int   cockpit_panel_height = -1;
+int   cockpit_panel_callbacks = 0;
 char  plugin_path[MAX_PATH];
 int   cockpit_save_count = 0;
 char  cockpit_save_string[32];
@@ -130,7 +131,8 @@ void detect_aircraft_filename(void) {
 
 int network_started = false;
 
-void draw_panel_colors(void)
+
+int panel_callback(XPLMDrawingPhase inPhase, int inIsBefore, void *inRefcon)
 {
 	XPLMSetGraphicsState(
 		0 /* no fog */,
@@ -141,62 +143,62 @@ void draw_panel_colors(void)
 		0 /* do depth testing */,
 		0 /* no depth writing */
 	);
-	log_printf("Drawing colored blocks to the panel\n");
+	log_printf("Drawing colored blocks to the panel for texture scanning - stage %d\n", cockpit_panel_callbacks);
 	// Draw polygons in anti-clockwise order, with 0,0 at bottom-left and units in panel pixel width x height
 #define DRAW_2D_POLYGON(left, top, right, bottom) glBegin(GL_POLYGON); glVertex2i(left, top); glVertex2i(left, bottom); glVertex2i(right, bottom); glVertex2i(right, top); glEnd();
 
 	// Draw some colored blocks that we will look for when scanning the textures
 	glColor4f(1.0, 0.0, 1.0, 1.0); DRAW_2D_POLYGON(0, 0, cockpit_texture_width - 1, cockpit_texture_height - 1); // Magenta
-	glColor4f(1.0, 0.0, 0.0, 1.0); DRAW_2D_POLYGON(  0,   0, 255, 255); // Red
-	glColor4f(0.0, 1.0, 0.0, 1.0); DRAW_2D_POLYGON(256,   0, 511, 255); // Green
-	glColor4f(0.0, 0.0, 1.0, 1.0); DRAW_2D_POLYGON(  0, 256, 255, 511); // Blue
+	glColor4f(1.0, 0.0, 0.0, 1.0); DRAW_2D_POLYGON(0, 0, 255, 255); // Red
+	glColor4f(0.0, 1.0, 0.0, 1.0); DRAW_2D_POLYGON(256, 0, 511, 255); // Green
+	glColor4f(0.0, 0.0, 1.0, 1.0); DRAW_2D_POLYGON(0, 256, 255, 511); // Blue
 	glColor4f(0.5, 0.5, 0.5, 1.0); DRAW_2D_POLYGON(256, 256, 511, 511); // Gray
-}
 
-int panel_callback(XPLMDrawingPhase inPhase, int inIsBefore, void *inRefcon) {
-	draw_panel_colors();
-	return 1;
-}
-
-static void find_last_match_in_texture(GLint start_texture_id)
-{
-	if (start_texture_id <= 0) {
-		start_texture_id = cockpit_texture_last;
-		cockpit_scan_count = -1;
+	// We need to do two passes through this callback, in the first pass we draw to the texture
+	// but if we try to detect we will find the wrong one. On the second and later pass we will observe the
+	// change in the texture we need to find.
+	cockpit_panel_callbacks++;
+	if (cockpit_panel_callbacks == 1) {
+		return 1;
 	}
-	else {
-		cockpit_scan_count--;
-	}
-	sprintf(cockpit_scan_string, "<<%d", cockpit_scan_count);
 
-	// Draw colors to the texture to make it possible to detect.
-	// xplm_Phase_Panel draws before the aircraft draws over the top
-	// xplm_Phase_Gauges draws after the aircraft but this is not what you get when you read the PNG texture when it is done in the 2D window callback
-	log_printf("Enabling texture draw pattern for detection");
-	XPLMRegisterDrawCallback(panel_callback, xplm_Phase_Panel, 1, NULL);
+	// Colored blocks drawn on the previous pass, so now we can disable the callback and go looking for the texture
+	log_printf("Second panel callback - removing callback and looking for texture\n");
+	XPLMUnregisterDrawCallback(panel_callback, xplm_Phase_Panel, 1, NULL);
+	cockpit_panel_callbacks = 0;
+
+	GLint start_texture_id = cockpit_texture_last;
+	cockpit_scan_count = -1;
 
 	log_printf("Finding last texture from %d (max=%d) that matches fw=%d, fh=%d, ff=%d for aircraft %s\n", start_texture_id, cockpit_texture_last, cockpit_texture_width, cockpit_texture_height, cockpit_texture_format, cockpit_aircraft_filename);
 	int tw, th, tf;
+	unsigned char *texture_temp = (unsigned char*)malloc(cockpit_texture_width*cockpit_texture_height * 4);
 	for (int i = start_texture_id; i >= 0; i--) {
 		XPLMBindTexture2d(i, 0);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &tw);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &th);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &tf);
 		if ((tw == cockpit_texture_width) && (th == cockpit_texture_height) && (tf == cockpit_texture_format)) {
-			log_printf("Found texture id=%d, width=%d, height=%d, internal format == %d\n", i, tw, th, tf);
-			cockpit_texture_id = i;
+			// Do expensive texture read-back since the dimensions are the same
+			glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_temp);
+			log_printf("Found candidate texture id=%d, width=%d, height=%d, internal format == %d, (0,0)=0x%.2x%.2x%.2x%.2x\n", i, tw, th, tf, texture_temp[0], texture_temp[1], texture_temp[2], texture_temp[3]);
+			if ((texture_temp[0] == 0xFF) && (texture_temp[1] == 0x00) && (texture_temp[2] == 0x00) && (texture_temp[3] == 0xFF)) {
+				log_printf("Texture id %d is a match from detected color\n", i);
+				cockpit_texture_id = i;
 
-			if (!network_started) {
-				log_printf("Texture is found, starting network thread to listen for XTextureExtractor clients\n");
-				start_networking_thread();
-				network_started = true;
+				if (!network_started) {
+					log_printf("Texture is found, starting network thread to listen for XTextureExtractor clients\n");
+					start_networking_thread();
+					network_started = true;
+				}
+
+				return 1;
 			}
-
-			return;
 		}
 	}
 	cockpit_texture_id = 0;
 	log_printf("Did not find matching texture, using id 0 instead\n");
+	return 1;
 }
 
 
@@ -532,10 +534,14 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 	);
 
 	if (cockpit_dirty) {
-		log_printf("Detected aircraft dirty flag set, so finding texture\n");
-		find_last_match_in_texture(-1);
+		log_printf("Detected aircraft dirty flag set, so begin finding texture\n");
+		// Draw colors to the texture to make it possible to detect.
+		// xplm_Phase_Panel draws before the aircraft draws over the top
+		// xplm_Phase_Gauges draws after the aircraft but this is not what you get when you read the PNG texture when it is done in the 2D window callback
+		XPLMRegisterDrawCallback(panel_callback, xplm_Phase_Panel, 1, NULL);
 		cockpit_texture_seq++;
 		cockpit_dirty = false;
+		return;
 	}
 
 	int *g_texture_lbrt = &_g_texture_lbrt[win_num][0];
@@ -765,12 +771,10 @@ int	handle_mouse(XPLMWindowID in_window_id, int x, int y, XPLMMouseStatus is_dow
 		}
 		else if(coord_in_rect(x, y, _g_texture_button_lbrt[win_num])) // user clicked the "texture info button" button
 		{
-			// Rescan from the top for the best texture, this usually works
-			find_last_match_in_texture(-1);
+			log_printf("Ignoring texture info button\n");
 		}
 		else if (coord_in_rect(x, y, _g_scan_button_lbrt[win_num])) {
-			// Resume from the current texture, this is when the default algorithm fails but is very rare
-			find_last_match_in_texture(cockpit_texture_id - 1);
+			log_printf("Ignoring scan button\n");
 		}
 		else if (coord_in_rect(x, y, _g_load_button_lbrt[win_num])) {
 			load_window_state();
@@ -807,15 +811,7 @@ int handle_command(XPLMCommandRef cmd_id, XPLMCommandPhase phase, void * in_refc
 	if (phase == xplm_CommandEnd)
 	{
 		log_printf("Found incoming command %p with reference [%s]\n", cmd_id, (char *)in_refcon);
-		if (cmd_id == cmd_texture_button) { // user clicked the "texture info button" button
-			// Rescan from the top for the best texture, this usually works
-			find_last_match_in_texture(-1);
-		}
-		else if (cmd_id == cmd_scan_button) {
-			// Resume from the current texture, this is when the default algorithm fails but is very rare
-			find_last_match_in_texture(cockpit_texture_id - 1);
-		}
-		else if (cmd_id == cmd_load_button) {
+		if (cmd_id == cmd_load_button) {
 			load_window_state();
 		}
 		else if (cmd_id == cmd_save_button) {
