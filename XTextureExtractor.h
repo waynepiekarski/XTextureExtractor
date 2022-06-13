@@ -46,14 +46,15 @@
 #endif
 
 static char __log_printf_buffer[4096];
-#define log_printf(fmt, ...) snprintf(__log_printf_buffer, 4096, "XTextureExtractor: " fmt, __VA_ARGS__), XPLMDebugString(__log_printf_buffer)
+#define log_printf(fmt, ...) snprintf(__log_printf_buffer, 4096, "XTextureExtractor-%s: " fmt, PLUGIN_VERSION, __VA_ARGS__), XPLMDebugString(__log_printf_buffer)
 
 #define COCKPIT_MAX_WINDOWS 20
 #define TCP_PLUGIN_PORT    "52500"
 #define MAX_TEXTURE_WIDTH  4096
 #define MAX_TEXTURE_HEIGHT 4096
 #define TCP_INTRO_HEADER   4096
-#define TCP_PLUGIN_VERSION "XTEv3"
+#define TCP_PROTOCOL_VERSION "XTEv3"
+#define PLUGIN_VERSION     "v3.0"
 #define TCP_SEND_BUFFER    10*1024*1024
 
 extern void start_networking_thread(void);

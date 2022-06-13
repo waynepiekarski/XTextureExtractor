@@ -257,8 +257,9 @@ PLUGIN_API int XPluginStart(
 
 	strcpy(outName, "XTextureExtractorPlugin");
 	strcpy(outSig, "net.waynepiekarski.windowcockpitplugin");
-	sprintf(outDesc, "%s - Extracts out cockpit textures into a separate window - compiled %s %s", TCP_PLUGIN_VERSION, __DATE__, __TIME__);
+	sprintf(outDesc, "XTextureExtractor-%s - Extracts out cockpit textures into a separate window - compiled %s %s, TCP protocol %s", PLUGIN_VERSION, __DATE__, __TIME__, TCP_PROTOCOL_VERSION);
 	log_printf("XPluginStart: XTextureExtractor plugin - %s - path %s\n", outDesc, plugin_path);
+	log_printf("Includes both OpenGL and Vulkan support for X-Plane 11 with auto-detection of textures\n");
 
 	// Register to listen for aircraft notes information, so we can detect Zibo 738 later
 	gAcfTailnum = XPLMFindDataRef("sim/aircraft/view/acf_tailnum");

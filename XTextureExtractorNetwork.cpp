@@ -48,7 +48,7 @@ void recompute_header() {
 	log_printf("Recomputing TCP header for [%s] at %dx%d\n", cockpit_aircraft_name, cockpit_texture_width, cockpit_texture_height);
 	memset(header, 0x00, TCP_INTRO_HEADER);
 	char *hptr = header;
-	hptr += sprintf(hptr, "%s %s %s\n", TCP_PLUGIN_VERSION, __DATE__, __TIME__);
+	hptr += sprintf(hptr, "%s %s %s\n", TCP_PROTOCOL_VERSION, __DATE__, __TIME__);
 	hptr += sprintf(hptr, "%s\n", cockpit_aircraft_name);
 	hptr += sprintf(hptr, "%d %d\n", cockpit_texture_width, cockpit_texture_height);
 	for (int i = 0; i < cockpit_window_limit; i++) {
