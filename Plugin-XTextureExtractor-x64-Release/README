@@ -1,0 +1,55 @@
+// ---------------------------------------------------------------------
+//
+// XTextureExtractor
+//
+// Copyright (C) 2018-2022 Wayne Piekarski
+// wayne@tinmith.net http://tinmith.net/wayne
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+//
+// ---------------------------------------------------------------------
+
+XTextureExtractor extracts the textures for the HSI, ND, EICAS, and CDU displays, and renders them in separate windows that you can place anywhere within X-Plane, on external unused monitors, and on separate computers via a network protocol. Rendering the textures within X-Plane is basically free, but using the network protocol requires a read from the GPU which will reduce the frame rate. XTextureExtractor v3 now works with both Vulkan and OpenGL rendering backends of X-Plane 11 with an automatic texture finding algorithm.
+
+The Android app allows you to view 2 panels on multiple phones or tablets, in either landscape or portait mode, and you can cycle through the available panels by tapping on them. Each device will save the configuration between sessions. The Android app can be downloaded from https://play.google.com/store/apps/details?id=net.waynepiekarski.xtextureextractor&hl=en and works on any device back to Android 4.0 (API 14).
+
+There is also a java-client included in the download archive, which can run on most Windows, Linux, OSX, and Raspberry Pi hardware. It requires the Java JDK with the javac compiler and java runtime available in your system PATH. You need to then use the run-xte.bat (Windows) or run-xte.sh (Linux/OSX/RPi3) to start up the display client. You need to call this script with the IP address of your X-Plane machine, so that it can establish the network connection. You can do this by either editing the script and putting the IP address in, or calling the script with arguments. There are a number of command-line options such as --geometry=XxYxWxH that allow you to hard code the placement of each window, and --window# where you select the window you want to render.
+
+For the network protocol, it uses TCP port 52500. You will need to ensure that your firewall and virus scanner do not block this port so that the remote clients can connect.
+
+Most X-Plane 11 aircraft only allow you to view these displays within the virtual cockpit. These displays can also be quite small and hard to read. However, if you have a home cockpit set up with multiple monitors, it would be ideal to see each of these displays shown full screen and without having to move the view around to see it clearly. Some aircraft support a pop-up CDU, but rarely any of the other displays. There are external apps that can provide some of these displays, but they reimplement everything from scratch and will never be an exact match for your aircraft.
+
+XTextureExtractor analyzes all the OpenGL textures and works out where these displays are rendered to. This same texture is then rendered into separate windows that you can move around and place wherever you want. They can be rendered as windows within X-Plane, or popped out and moved around within the OS itself. You can drag popped-out windows to external monitors and arrange them however you like, and these configurations can be saved.
+
+X-Plane 11 doesn't natively support this functionality via the SDK, so the plugin uses OpenGL calls to try and guess the correct texture id. The plugin scans the aircraft -PANELS- directory to find a PNG file, determines the panel dimensions, and looks for candidate textures that match these dimensions. The plugin writes a red pixel to (0,0) during a panel callback and then scans the candidate textures to look for a texture with a red pixel in that location. This technique has proven to be reliable on an NVidia GTX 1080 and Windows 10 with both Vulkan and OpenGL, but may not work on other video cards. Finding the texture is now completely automatic and requires no intervention from the user like with the previous v1 plugin.
+
+The plugin requires the cockpit to be rendered, so only works with internal and not external views. If you need an external view, start from within a cockpit view, and move the camera outside the aircraft. This will cause X-Plane to render the cockpit panels, and allow the plugin to work.
+
+Almost every aircraft in X-Plane with digital displays (not steam gauges) is supported, such as: the standard X-Plane 737 and 747, the Zibo 738 and Ultimate 739, Flight Factor 757, 767, and 777, Felis Tu-154, SSG 748, Magknight 787, CRJ-200, and many more! The plugin also makes it easy to support new aircraft, just load it up and the plugin will create a sample .tex file that you can edit and save a matching .png snapshot to the plugin directory. The PNG file contains the entire texture that you can load into an image editor and determine the top-left and bottom-right coordinates for each window to extract. Then edit the .tex file to specify these coordinates and reload the aircraft.
+
+The only aircraft which requires special handling is the Flight Factor A320, since it uses more than one texture, but otherwise every aircraft tested works since they all implement a standard X-Plane panel. The complete list of supported aircraft is here: https://github.com/waynepiekarski/XTextureExtractor/tree/master/XTextureExtractor-Data
+
+When running, the plugin presents a number of buttons to click on:
+
+- Pop-Out/Pop-In: switch between window within X-Plane or native OS window
+- GL: shows the texture id and aircraft name.
+- Ld: Load the window placement config file.
+- Sv: Save the window placement config file, digit after acknowledges that the save happened correctly.
+- Clr: Delete the window placement config file.
+
+You should extract the ZIP file and copy the Plugin-XTextureExtractor-x64-Release directory into your X-Plane 11\Resources\plugins directory. The .tex and .png files are stored with the plugin.
+
+XTextureExtractor is open source, licensed under the GNU Public License v3, and available from https://github.com/waynepiekarski/XTextureExtractor
+
+This plugin is very experimental, relies in undocumented APIs, and may have bugs. I look forward to your feedback on this plugin, and hope you all find it useful.
