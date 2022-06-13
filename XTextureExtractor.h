@@ -56,6 +56,10 @@ static char __log_printf_buffer[4096];
 #define TCP_PROTOCOL_VERSION "XTEv3"
 #define PLUGIN_VERSION     "v3.0"
 #define TCP_SEND_BUFFER    10*1024*1024
+// Windows defines MAX_PATH as 260 and https://developer.x-plane.com/sdk/XPLMGetNthAircraftModel/ defines filename as 256 and path as 512
+// Define a safe path length which we can be sure exceeds all possible cases
+#define SAFE_PATH_LENGTH   4096
+// TODO: The code is a mess of unchecked char strings, which should be replaced with std::string or checked snprintf
 
 extern void start_networking_thread(void);
 extern unsigned char *texture_pointer;

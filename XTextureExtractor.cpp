@@ -40,12 +40,12 @@ int   cockpit_texture_seq = -1;     // Increment this each time we change aircra
 bool  cockpit_dirty = false;
 bool  cockpit_aircraft_known = false;
 char  cockpit_aircraft_name[256];
-char  cockpit_aircraft_filename[256];
+char  cockpit_aircraft_filename[SAFE_PATH_LENGTH];
 int   cockpit_snapshot_seq = -1;
 int   cockpit_panel_width = -1;
 int   cockpit_panel_height = -1;
 int   cockpit_panel_callbacks = 0;
-char  plugin_path[MAX_PATH];
+char  plugin_path[SAFE_PATH_LENGTH];
 int   cockpit_save_count = 0;
 char  cockpit_save_string[32];
 int   cockpit_window_limit = 0;
@@ -93,15 +93,15 @@ void detect_aircraft_panel(char* acfpath) {
 
 void detect_aircraft_filename(void) {
 	// https://developer.x-plane.com/sdk/XPLMGetNthAircraftModel/ defines filename as 256 and path as 512
-	char filename[256];
-	char path[512];
-	char tailnum[256];
+	char filename[SAFE_PATH_LENGTH];
+	char path[SAFE_PATH_LENGTH];
 	XPLMGetNthAircraftModel(XPLM_USER_AIRCRAFT, filename, path);
 	_strlwr(filename);
 	_strlwr(path);
 	detect_aircraft_panel(path);
 
 	int result;
+	char tailnum[256];
 	if (gAcfTailnum == NULL) {
 		strcpy(tailnum, "(null)");
 	}
@@ -449,7 +449,7 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		g_pop_button_lbrt[1] = g_pop_button_lbrt[3] - (int)(1.25f * char_height); // a bit taller than the button text
 		
 		// Position the "move to lower left" button just to the right of the pop-in/pop-out button
-		char texture_info_text[128];
+		char texture_info_text[256];
 		sprintf(texture_info_text, "GL%d [%s]", cockpit_texture_id, cockpit_aircraft_name);
 
 #define DEFINE_BOX(_array, _left, _string) _array[0] = _left[2] + 10, _array[1] = _left[1], _array[2] = _array[0] + (int)XPLMMeasureString(xplmFont_Proportional, _string, (int)strlen(_string)), _array[3] = _left[3]
@@ -517,7 +517,7 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		// If this is the first time we've seen the texture since the aircraft was loaded then we should save a PNG for debugging
 		// Do this immediately so we get the colored background included, it helps by showing magenta around each of the instruments
 		if ((cockpit_texture_id > 0) && (cockpit_snapshot_seq != cockpit_texture_seq)) {
-			char snapshot[512];
+			char snapshot[SAFE_PATH_LENGTH];
 			sprintf(snapshot, "%s\\%s.tex.png", plugin_path, cockpit_aircraft_filename);
 			save_png(cockpit_texture_id, snapshot);
 			cockpit_snapshot_seq = cockpit_texture_seq;
@@ -552,14 +552,14 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 }
 
 void clear_window_state() {
-	char filename[256];
+	char filename[SAFE_PATH_LENGTH];
 	sprintf(filename, "windowcockpit-%s.txt", cockpit_aircraft_name);
 	log_printf("Removing window save file %s\n", filename);
 	_unlink(filename);
 }
 
 void save_window_state() {
-	char filename[256];
+	char filename[SAFE_PATH_LENGTH];
 	sprintf(filename, "windowcockpit-%s.txt", cockpit_aircraft_name);
 	log_printf("Saving XTextureExtractor state to %s\n", filename);
 	FILE *fp = fopen(filename, "wb");
@@ -601,8 +601,7 @@ void load_window_state() {
 	// Read in the new aircraft configuration file
 	cockpit_window_limit = 0;
 	cockpit_aircraft_known = false;
-	char texturefile[256];
-	char buffer[1024];
+	char texturefile[SAFE_PATH_LENGTH];
 	sprintf(texturefile, "%s\\%s.tex", plugin_path, cockpit_aircraft_filename);
 	FILE *fp = fopen(texturefile, "rb");
 	if (fp == NULL) {
@@ -628,6 +627,7 @@ void load_window_state() {
 	} else {
 		log_printf("Loading XTextureExtractor state from %s\n", texturefile);
 	}
+	char buffer[1024];
 	char *result = fgets(buffer, 1024, fp);
 	if (result == NULL) {
 		log_printf("Failed to read first line from file, aborting reading\n");
@@ -715,7 +715,7 @@ void load_window_state() {
 
 
 	// Configure the window based on a local configuration file (if present)
-	char filename[256];
+	char filename[SAFE_PATH_LENGTH];
 	sprintf(filename, "windowcockpit-%s.txt", cockpit_aircraft_name);
 	fp = fopen(filename, "rb");
 	if (fp == NULL) {
