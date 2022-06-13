@@ -39,6 +39,7 @@ GLint cockpit_texture_jump = 1000; // Whenever the aircraft switches, bump up th
 int   cockpit_texture_seq = -1;     // Increment this each time we change aircraft or textures, so we can restart the network connection
 bool  cockpit_dirty = false;
 bool  cockpit_aircraft_known = false;
+int   cockpit_aircraft_snapshot = 0;
 char  cockpit_aircraft_name[256];
 char  cockpit_aircraft_filename[256];
 int   cockpit_panel_width = -1;
@@ -215,14 +216,12 @@ static int _g_load_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, 
 static int _g_save_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_clear_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_hide_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
-static int _g_dump_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 
 XPLMCommandRef cmd_texture_button = NULL;
 XPLMCommandRef cmd_load_button = NULL;
 XPLMCommandRef cmd_save_button = NULL;
 XPLMCommandRef cmd_clear_button = NULL;
 XPLMCommandRef cmd_hide_button = NULL;
-XPLMCommandRef cmd_dump_button = NULL;
 XPLMCommandRef cmd_plugin_button = NULL;
 
 char _g_window_name[COCKPIT_MAX_WINDOWS][256];  // titles of each window
@@ -279,7 +278,6 @@ PLUGIN_API int XPluginStart(
 	XPLMRegisterCommandHandler(cmd_save_button  = XPLMCreateCommand("XTE/save", "XTextureExtractor Save"),  handle_command, 1, "Save");
 	XPLMRegisterCommandHandler(cmd_clear_button = XPLMCreateCommand("XTE/clear", "XTextureExtractor Clear"), handle_command, 1, "Clear");
 	XPLMRegisterCommandHandler(cmd_hide_button  = XPLMCreateCommand("XTE/hide", "XTextureExtractor Hide"),  handle_command, 1, "Hide");
-	XPLMRegisterCommandHandler(cmd_dump_button  = XPLMCreateCommand("XTE/dump", "XTextureExtractor Dump"),  handle_command, 1, "Dump");
 	XPLMRegisterCommandHandler(cmd_plugin_button = XPLMCreateCommand("XTE/plugin", "XTextureExtractor Reload Plugins"), handle_command, 1, "Reload Plugins");
 
 	return 1;
@@ -302,7 +300,6 @@ PLUGIN_API void	XPluginStop(void)
 	if (cmd_save_button != NULL) XPLMUnregisterCommandHandler(cmd_save_button, handle_command, 0, 0); cmd_save_button = NULL;
 	if (cmd_clear_button != NULL) XPLMUnregisterCommandHandler(cmd_clear_button, handle_command, 0, 0); cmd_clear_button = NULL;
 	if (cmd_hide_button != NULL) XPLMUnregisterCommandHandler(cmd_hide_button, handle_command, 0, 0); cmd_hide_button = NULL;
-	if (cmd_dump_button != NULL) XPLMUnregisterCommandHandler(cmd_dump_button, handle_command, 0, 0); cmd_dump_button = NULL;
 }
 
 bool plugin_disabled = false;
@@ -389,29 +386,6 @@ void save_png(GLint texId, const char* output_name = "texture_save.png")
 	}
 }
 
-void dump_debug()
-{
-	int tw, th, tf;
-	log_printf("Dump request, searching for %dx%d textures for %s\n", cockpit_texture_width, cockpit_texture_height, cockpit_aircraft_filename);
-
-	for (int i = 0; i < cockpit_texture_last; i++) {
-		XPLMBindTexture2d(i, 0);
-		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &tw);
-		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &th);
-		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &tf);
-
-		// XP737 panel is "fbo-list panel texture 1-fbo" at 2048x1024
-		// FF7*7 panel is "fbo-list panel texture 1-fbo" at 2048x2048
-		// ZB738 panel is "fbo-list panel texture 1-fbo" at 2048x2048
-		if ((tw == cockpit_texture_width) && (th == cockpit_texture_height)) {
-			log_printf("texture id=%d, width=%d, height=%d iformat=%d\n", i, tw, th, tf);
-		}
-	}
-
-	log_printf("Saving texture for id %d\n", cockpit_texture_id);
-	save_png(cockpit_texture_id);
-}
-
 
 void draw_texture_rect(int leftX, int topY, int rightX, int botY, int maxX, int maxY, int l, int t, int r, int b) {
 	XPLMBindTexture2d(cockpit_texture_id, 0);
@@ -460,7 +434,6 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 	int *g_load_button_lbrt = &_g_load_button_lbrt[win_num][0];
 	int *g_clear_button_lbrt = &_g_clear_button_lbrt[win_num][0];
 	int *g_hide_button_lbrt = &_g_hide_button_lbrt[win_num][0];
-	int *g_dump_button_lbrt = &_g_dump_button_lbrt[win_num][0];
 
 	// Draw our buttons
 	if (decorateWindows)
@@ -481,7 +454,6 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		DEFINE_BOX(g_save_button_lbrt, g_load_button_lbrt, cockpit_save_string);
 		DEFINE_BOX(g_clear_button_lbrt, g_save_button_lbrt, "Clr");
 		DEFINE_BOX(g_hide_button_lbrt, g_clear_button_lbrt, "H");
-		DEFINE_BOX(g_dump_button_lbrt, g_hide_button_lbrt, "Dbg");
 #undef DEFINE_BOX
 
 		// Draw the boxes around our rudimentary buttons
@@ -494,7 +466,6 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		DRAW_BOX(g_save_button_lbrt);
 		DRAW_BOX(g_clear_button_lbrt);
 		DRAW_BOX(g_hide_button_lbrt);
-		DRAW_BOX(g_dump_button_lbrt);
 #undef DRAW_BOX
 
 		// Draw the button text (pop in/pop out)
@@ -508,7 +479,6 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		XPLMDrawString(col_white, g_save_button_lbrt[0],  g_save_button_lbrt[1]  + 4, (char *)cockpit_save_string, NULL, xplmFont_Proportional);
 		XPLMDrawString(col_white, g_clear_button_lbrt[0], g_clear_button_lbrt[1] + 4, (char *)"Clr", NULL, xplmFont_Proportional);
 		XPLMDrawString(col_white, g_hide_button_lbrt[0],  g_hide_button_lbrt[1] + 4, (char *)"H", NULL, xplmFont_Proportional);
-		XPLMDrawString(col_white, g_dump_button_lbrt[0],  g_dump_button_lbrt[1]  + 4, (char *)"Dbg", NULL, xplmFont_Proportional);
 	}
 
 	XPLMSetGraphicsState(
@@ -541,6 +511,17 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 	}
 
 	if (cockpit_aircraft_known) {
+		// If this is the first time we've seen the texture since the aircraft was loaded then we should save a PNG for debugging
+		// We cannot just use the first image though, since it still has the colored blocks, need to wait another cycle for X-Plane to redraw it cleanly
+		if (cockpit_texture_id > 0) {
+			if (cockpit_aircraft_snapshot == 2) {
+				char snapshot[512];
+				sprintf(snapshot, "%s\\%s.tex.png", plugin_path, cockpit_aircraft_filename);
+				save_png(cockpit_texture_id, snapshot);
+			}
+			cockpit_aircraft_snapshot++;
+		}
+
 		// Draw the texture to the window
 		draw_texture_rect(g_texture_lbrt[0], g_texture_lbrt[1], g_texture_lbrt[2], g_texture_lbrt[3], cockpit_texture_width, cockpit_texture_height, l - sideInset, t - topInset, r + sideInset, b - sideInset);
 
@@ -624,8 +605,25 @@ void load_window_state() {
 	sprintf(texturefile, "%s\\%s.tex", plugin_path, cockpit_aircraft_filename);
 	FILE *fp = fopen(texturefile, "rb");
 	if (fp == NULL) {
-		log_printf("Could not load texture data from file %s, this aircraft is unknown\n", texturefile);
-		return;
+		log_printf("Could not load texture data from file %s, this aircraft is unknown - writing a new config\n", texturefile);
+		fp = fopen(texturefile, "wb");
+		if (fp == NULL) {
+			log_printf("Could not write to texture file %s - skipping auto config", texturefile);
+			return;
+		}
+		// Auto generate a new config so the user can edit it later
+		fprintf(fp, "TEMP %d %d %d\n", cockpit_panel_width, cockpit_panel_height, 32856);
+		fprintf(fp, "# Auto-generated template for %s\n", cockpit_aircraft_filename);
+		fprintf(fp, "# Replace above TEMP with aircraft name\n");
+		fprintf(fp, "# Replace ALL with multiple <WINNAME> <X1> <Y1> <X2> <Y2>\n");
+		fprintf(fp, "# Inspect the %s.png file with image viewer to extract each window\n", cockpit_aircraft_filename);
+		fprintf(fp, "ALL 0 0 %d %d\n", cockpit_panel_width - 1, cockpit_panel_height - 1);
+		fclose(fp);
+		// Open up the generated config so the following steps work
+		fp = fopen(texturefile, "rb");
+		if (fp == NULL) {
+			log_printf("Could not open generated texture file %s - should not happen\n", texturefile);
+		}
 	} else {
 		log_printf("Loading XTextureExtractor state from %s\n", texturefile);
 	}
@@ -653,6 +651,7 @@ void load_window_state() {
 		return;
 	}
 	cockpit_aircraft_known = true;
+	cockpit_aircraft_snapshot = 0;
 
 	int i = 0;
 	while (i < COCKPIT_MAX_WINDOWS) {
@@ -775,9 +774,6 @@ int	handle_mouse(XPLMWindowID in_window_id, int x, int y, XPLMMouseStatus is_dow
 			log_printf("Inverting window decorations to %d\n", decorateWindows);
 			load_window_state();
 		}
-		else if (coord_in_rect(x, y, _g_dump_button_lbrt[win_num])) {
-			dump_debug();
-		}
 		else {
 			// Make the whole window clickable if the buttons are hidden
 			if (!decorateWindows) {
@@ -809,9 +805,6 @@ int handle_command(XPLMCommandRef cmd_id, XPLMCommandPhase phase, void * in_refc
 			decorateWindows = !decorateWindows;
 			log_printf("Inverting window decorations to %d\n", decorateWindows);
 			load_window_state();
-		}
-		else if (cmd_id == cmd_dump_button) {
-			dump_debug();
 		}
 		else if (cmd_id == cmd_plugin_button) {
 			// https://developer.x-plane.com/2017/09/two-gotchas-developing-plugins/
