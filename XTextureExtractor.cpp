@@ -39,9 +39,9 @@ GLint cockpit_texture_jump = 1000; // Whenever the aircraft switches, bump up th
 int   cockpit_texture_seq = -1;     // Increment this each time we change aircraft or textures, so we can restart the network connection
 bool  cockpit_dirty = false;
 bool  cockpit_aircraft_known = false;
-int   cockpit_aircraft_snapshot = 0;
 char  cockpit_aircraft_name[256];
 char  cockpit_aircraft_filename[256];
+int   cockpit_snapshot_seq = -1;
 int   cockpit_panel_width = -1;
 int   cockpit_panel_height = -1;
 int   cockpit_panel_callbacks = 0;
@@ -183,6 +183,9 @@ int panel_callback(XPLMDrawingPhase inPhase, int inIsBefore, void *inRefcon)
 			if ((texture_temp[0] == 0xFF) && (texture_temp[1] == 0x00) && (texture_temp[2] == 0x00) && (texture_temp[3] == 0xFF)) {
 				log_printf("Texture id %d is a match from detected color\n", i);
 				cockpit_texture_id = i;
+
+				// Indicate that we have switched to a new texture now and it is active, the network thread is looking for this
+				cockpit_texture_seq++;
 
 				if (!network_started) {
 					log_printf("Texture is found, starting network thread to listen for XTextureExtractor clients\n");
@@ -380,7 +383,7 @@ void save_png(GLint texId, const char* output_name = "texture_save.png")
 	delete[] pixels;
 	delete[] flipped;
 	if (fclose(fp) == 0) {
-		log_printf("PNG save of %zu bytes is complete to file %s in X-Plane main directory\n", png.size(), output_name);
+		log_printf("PNG save of texture id %d with %zu bytes is complete to file %s in X-Plane main directory\n", texId, png.size(), output_name);
 	}
 	else {
 		log_printf("Failed to save PNG file %s\n", output_name);
@@ -498,7 +501,6 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		// xplm_Phase_Panel draws before the aircraft draws over the top
 		// xplm_Phase_Gauges draws after the aircraft but this is not what you get when you read the PNG texture when it is done in the 2D window callback
 		XPLMRegisterDrawCallback(panel_callback, xplm_Phase_Panel, 1, NULL);
-		cockpit_texture_seq++;
 		cockpit_dirty = false;
 		return;
 	}
@@ -513,14 +515,12 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 
 	if (cockpit_aircraft_known) {
 		// If this is the first time we've seen the texture since the aircraft was loaded then we should save a PNG for debugging
-		// We cannot just use the first image though, since it still has the colored blocks, need to wait another cycle for X-Plane to redraw it cleanly
-		if (cockpit_texture_id > 0) {
-			if (cockpit_aircraft_snapshot == 2) {
-				char snapshot[512];
-				sprintf(snapshot, "%s\\%s.tex.png", plugin_path, cockpit_aircraft_filename);
-				save_png(cockpit_texture_id, snapshot);
-			}
-			cockpit_aircraft_snapshot++;
+		// Do this immediately so we get the colored background included, it helps by showing magenta around each of the instruments
+		if ((cockpit_texture_id > 0) && (cockpit_snapshot_seq != cockpit_texture_seq)) {
+			char snapshot[512];
+			sprintf(snapshot, "%s\\%s.tex.png", plugin_path, cockpit_aircraft_filename);
+			save_png(cockpit_texture_id, snapshot);
+			cockpit_snapshot_seq = cockpit_texture_seq;
 		}
 
 		// Draw the texture to the window
@@ -652,7 +652,6 @@ void load_window_state() {
 		return;
 	}
 	cockpit_aircraft_known = true;
-	cockpit_aircraft_snapshot = 0;
 
 	int i = 0;
 	while (i < COCKPIT_MAX_WINDOWS) {
