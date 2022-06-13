@@ -42,7 +42,7 @@
 #include <GL/gl.h>
 #endif
 #ifndef XPLM301
-#error This is made to be compiled against the XPLM301 SDK
+#error This is made to be compiled against the XPLM301 SDK, this macro is also not set in the vcxproj Debug mode flags
 #endif
 
 static char __log_printf_buffer[4096];
