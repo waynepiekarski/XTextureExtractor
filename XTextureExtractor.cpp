@@ -50,6 +50,8 @@ int   cockpit_scan_count = 0;
 char  cockpit_scan_string[32];
 int   cockpit_window_limit = 0;
 
+extern void save_png(GLint texId, const char* output_name);
+
 
 void detect_aircraft_panel(char* acfpath) {
 	log_printf("Finding panel texture for ACF path [%s]\n", acfpath);
@@ -340,7 +342,7 @@ PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFrom, int inMsg, void * inP
 }
 
 
-void save_png(GLint texId)
+void save_png(GLint texId, const char* output_name = "texture_save.png")
 {
 	int tw, th, tf;
 	XPLMBindTexture2d(texId, 0);
@@ -375,7 +377,7 @@ void save_png(GLint texId)
 	state.encoder.auto_convert = 0; // Must provide this or will ignore the input/output types
 	unsigned error = lodepng::encode(png, flipped, tw, th, state);
 
-	FILE *fp = fopen("texture_save.png", "wb");
+	FILE *fp = fopen(output_name, "wb");
 	if (fp == NULL) {
 		log_printf("Could not save to file\n");
 		delete[] pixels;
@@ -386,10 +388,10 @@ void save_png(GLint texId)
 	delete[] pixels;
 	delete[] flipped;
 	if (fclose(fp) == 0) {
-		log_printf("PNG save of %zu bytes is complete to file texture_save.png in X-Plane main directory\n", png.size());
+		log_printf("PNG save of %zu bytes is complete to file %s in X-Plane main directory\n", png.size(), output_name);
 	}
 	else {
-		log_printf("Failed to save PNG file\n");
+		log_printf("Failed to save PNG file %s\n", output_name);
 	}
 }
 
