@@ -47,8 +47,6 @@ int   cockpit_panel_callbacks = 0;
 char  plugin_path[MAX_PATH];
 int   cockpit_save_count = 0;
 char  cockpit_save_string[32];
-int   cockpit_scan_count = 0;
-char  cockpit_scan_string[32];
 int   cockpit_window_limit = 0;
 
 extern void save_png(GLint texId, const char* output_name);
@@ -168,7 +166,6 @@ int panel_callback(XPLMDrawingPhase inPhase, int inIsBefore, void *inRefcon)
 	cockpit_panel_callbacks = 0;
 
 	GLint start_texture_id = cockpit_texture_last;
-	cockpit_scan_count = -1;
 
 	log_printf("Finding last texture from %d (max=%d) that matches fw=%d, fh=%d, ff=%d for aircraft %s\n", start_texture_id, cockpit_texture_last, cockpit_texture_width, cockpit_texture_height, cockpit_texture_format, cockpit_aircraft_filename);
 	int tw, th, tf;
@@ -214,7 +211,6 @@ void				dummy_key_handler(XPLMWindowID in_window_id, char key, XPLMKeyFlags flag
 
 static int _g_pop_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_texture_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
-static int _g_scan_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_load_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_save_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 static int _g_clear_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
@@ -222,7 +218,6 @@ static int _g_hide_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, 
 static int _g_dump_button_lbrt[COCKPIT_MAX_WINDOWS][4]; // left, bottom, right, top
 
 XPLMCommandRef cmd_texture_button = NULL;
-XPLMCommandRef cmd_scan_button = NULL;
 XPLMCommandRef cmd_load_button = NULL;
 XPLMCommandRef cmd_save_button = NULL;
 XPLMCommandRef cmd_clear_button = NULL;
@@ -271,7 +266,6 @@ PLUGIN_API int XPluginStart(
 
 	// Global save button that increments each time
 	strcpy(cockpit_save_string, "Sv");
-	strcpy(cockpit_scan_string, "<<X");
 
 	// Implement a debugging key if we need it
 #ifdef DEBUG_KEYPRESS
@@ -281,7 +275,6 @@ PLUGIN_API int XPluginStart(
 
 	// Implement commands for all the buttons we support
 	XPLMRegisterCommandHandler(cmd_texture_button = XPLMCreateCommand("XTE/newscan", "XTextureExtractor New Scan"), handle_command, 1, "New Scan");
-	XPLMRegisterCommandHandler(cmd_scan_button  = XPLMCreateCommand("XTE/scan", "XTextureExtractor Scan"),  handle_command, 1, "Scan");
 	XPLMRegisterCommandHandler(cmd_load_button  = XPLMCreateCommand("XTE/load", "XTextureExtractor Load"),  handle_command, 1, "Load");
 	XPLMRegisterCommandHandler(cmd_save_button  = XPLMCreateCommand("XTE/save", "XTextureExtractor Save"),  handle_command, 1, "Save");
 	XPLMRegisterCommandHandler(cmd_clear_button = XPLMCreateCommand("XTE/clear", "XTextureExtractor Clear"), handle_command, 1, "Clear");
@@ -305,7 +298,6 @@ PLUGIN_API void	XPluginStop(void)
 	}
 
 	if (cmd_texture_button != NULL) XPLMUnregisterCommandHandler(cmd_texture_button, handle_command, 0, 0); cmd_texture_button = NULL;
-	if (cmd_scan_button != NULL) XPLMUnregisterCommandHandler(cmd_scan_button, handle_command, 0, 0); cmd_scan_button = NULL;
 	if (cmd_load_button != NULL) XPLMUnregisterCommandHandler(cmd_load_button, handle_command, 0, 0); cmd_load_button = NULL;
 	if (cmd_save_button != NULL) XPLMUnregisterCommandHandler(cmd_save_button, handle_command, 0, 0); cmd_save_button = NULL;
 	if (cmd_clear_button != NULL) XPLMUnregisterCommandHandler(cmd_clear_button, handle_command, 0, 0); cmd_clear_button = NULL;
@@ -464,7 +456,6 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 	intptr_t win_num = (intptr_t)in_refcon;
 	int *g_pop_button_lbrt = &_g_pop_button_lbrt[win_num][0];
 	int *g_texture_button_lbrt = &_g_texture_button_lbrt[win_num][0];
-	int *g_scan_button_lbrt = &_g_scan_button_lbrt[win_num][0];
 	int *g_save_button_lbrt = &_g_save_button_lbrt[win_num][0];
 	int *g_load_button_lbrt = &_g_load_button_lbrt[win_num][0];
 	int *g_clear_button_lbrt = &_g_clear_button_lbrt[win_num][0];
@@ -486,8 +477,7 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 
 #define DEFINE_BOX(_array, _left, _string) _array[0] = _left[2] + 10, _array[1] = _left[1], _array[2] = _array[0] + (int)XPLMMeasureString(xplmFont_Proportional, _string, (int)strlen(_string)), _array[3] = _left[3]
 		DEFINE_BOX(g_texture_button_lbrt, g_pop_button_lbrt, texture_info_text);
-		DEFINE_BOX(g_scan_button_lbrt, g_texture_button_lbrt, cockpit_scan_string);
-		DEFINE_BOX(g_load_button_lbrt, g_scan_button_lbrt, "Ld");
+		DEFINE_BOX(g_load_button_lbrt, g_texture_button_lbrt, "Ld");
 		DEFINE_BOX(g_save_button_lbrt, g_load_button_lbrt, cockpit_save_string);
 		DEFINE_BOX(g_clear_button_lbrt, g_save_button_lbrt, "Clr");
 		DEFINE_BOX(g_hide_button_lbrt, g_clear_button_lbrt, "H");
@@ -500,7 +490,6 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 #define DRAW_BOX(_array) glBegin(GL_LINE_LOOP), glVertex2i(_array[0], _array[3]), glVertex2i(_array[2], _array[3]), glVertex2i(_array[2], _array[1]), glVertex2i(_array[0], _array[1]), glEnd()
 		DRAW_BOX(g_pop_button_lbrt);
 		DRAW_BOX(g_texture_button_lbrt);
-		DRAW_BOX(g_scan_button_lbrt);
 		DRAW_BOX(g_load_button_lbrt);
 		DRAW_BOX(g_save_button_lbrt);
 		DRAW_BOX(g_clear_button_lbrt);
@@ -515,7 +504,6 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		XPLMDrawString(col_white, g_texture_button_lbrt[0], g_texture_button_lbrt[1] + 4, (char *)texture_info_text, NULL, xplmFont_Proportional);
 
 		// Draw the load/save/clear text
-		XPLMDrawString(col_white, g_scan_button_lbrt[0],  g_scan_button_lbrt[1] + 4, (char *)cockpit_scan_string, NULL, xplmFont_Proportional);
 		XPLMDrawString(col_white, g_load_button_lbrt[0],  g_load_button_lbrt[1]  + 4, (char *)"Ld", NULL, xplmFont_Proportional);
 		XPLMDrawString(col_white, g_save_button_lbrt[0],  g_save_button_lbrt[1]  + 4, (char *)cockpit_save_string, NULL, xplmFont_Proportional);
 		XPLMDrawString(col_white, g_clear_button_lbrt[0], g_clear_button_lbrt[1] + 4, (char *)"Clr", NULL, xplmFont_Proportional);
@@ -772,9 +760,6 @@ int	handle_mouse(XPLMWindowID in_window_id, int x, int y, XPLMMouseStatus is_dow
 		else if(coord_in_rect(x, y, _g_texture_button_lbrt[win_num])) // user clicked the "texture info button" button
 		{
 			log_printf("Ignoring texture info button\n");
-		}
-		else if (coord_in_rect(x, y, _g_scan_button_lbrt[win_num])) {
-			log_printf("Ignoring scan button\n");
 		}
 		else if (coord_in_rect(x, y, _g_load_button_lbrt[win_num])) {
 			load_window_state();
