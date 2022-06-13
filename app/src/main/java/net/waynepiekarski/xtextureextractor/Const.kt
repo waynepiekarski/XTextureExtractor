@@ -2,7 +2,7 @@
 //
 // XTextureExtractor
 //
-// Copyright (C) 2018 Wayne Piekarski
+// Copyright (C) 2018-2022 Wayne Piekarski
 // wayne@tinmith.net http://tinmith.net/wayne
 //
 // This program is free software: you can redistribute it and/or modify
