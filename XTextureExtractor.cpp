@@ -853,14 +853,12 @@ int	handle_mouse(XPLMWindowID in_window_id, int x, int y, XPLMMouseStatus is_dow
 		else if (coord_in_rect(x, y, _g_hide_button_lbrt[win_num])) {
 			decorateWindows = !decorateWindows;
 			log_printf("Inverting window decorations to %d\n", decorateWindows);
-			load_window_state();
 		}
 		else {
 			// Make the whole window clickable if the buttons are hidden
 			if (!decorateWindows) {
 				decorateWindows = !decorateWindows;
 				log_printf("Inverting window decorations to %d\n", decorateWindows);
-				load_window_state();
 			}
 		}
 	}
@@ -885,7 +883,6 @@ int handle_command(XPLMCommandRef cmd_id, XPLMCommandPhase phase, void * in_refc
 		else if (cmd_id == cmd_hide_button) {
 			decorateWindows = !decorateWindows;
 			log_printf("Inverting window decorations to %d\n", decorateWindows);
-			load_window_state();
 		}
 		else if (cmd_id == cmd_plugin_button) {
 			// https://developer.x-plane.com/2017/09/two-gotchas-developing-plugins/
