@@ -53,15 +53,24 @@ int   cockpit_save_count = 0;
 char  cockpit_save_string[32];
 int   cockpit_window_limit = 0;
 
+// Cannot just use forward slash everywhere because we use strrchr on path names from the OS
+#ifdef WIN
+#define PATH_SEP_CHR '\\'
+#define PATH_SEP_STR "\\"
+#else
+#define PATH_SEP_CHR '/'
+#define PATH_SEP_STR "/"
+#endif
+
 extern void save_png(GLint texId, const char* output_name);
 
 
 void detect_aircraft_panel(char* acfpath) {
 	log_printf("Finding panel texture for ACF path [%s]\n", acfpath);
 	char* path = acfpath;
-	char *slash = strrchr(path, '\\');
+	char *slash = strrchr(path, PATH_SEP_CHR);
 	if (slash == NULL) {
-		log_printf("Could not find ending backslash in [%s]\n", acfpath);
+		log_printf("Could not find ending path separator in [%s]\n", acfpath);
 		return;
 	}
 	*slash = '\0';
@@ -261,13 +270,13 @@ PLUGIN_API int XPluginStart(
 						char *		outDesc)
 {
 	XPLMGetPluginInfo(XPLMGetMyID(), NULL, plugin_path, NULL, NULL);
-	char *slash = strrchr(plugin_path, '\\'); // Chop off the filename so we can get the path
+	char *slash = strrchr(plugin_path, PATH_SEP_CHR); // Chop off the filename so we can get the path
 	if (slash != NULL) {
 		*slash = '\0';
 	} else {
-		log_printf("The XPLMGetPluginInfo returned did not contain \\64\\win.xpl as expected [%s]\n", plugin_path);
+		log_printf("The XPLMGetPluginInfo returned did not contain " PATH_SEP_STR "64" PATH_SEP_STR "win.xpl as expected [%s]\n", plugin_path);
 	}
-	strcat(plugin_path, "\\..\\");
+	strcat(plugin_path, PATH_SEP_STR ".." PATH_SEP_STR);
 
 	strcpy(outName, "XTextureExtractorPlugin");
 	strcpy(outSig, "net.waynepiekarski.windowcockpitplugin");
@@ -529,7 +538,7 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		// Do this immediately so we get the colored background included, it helps by showing magenta around each of the instruments
 		if ((cockpit_texture_id > 0) && (cockpit_snapshot_seq != cockpit_texture_seq)) {
 			char snapshot[SAFE_PATH_LENGTH];
-			sprintf(snapshot, "%s\\%s.tex.png", plugin_path, cockpit_aircraft_filename);
+			sprintf(snapshot, "%s%s.tex.png", plugin_path, cockpit_aircraft_filename);
 			save_png(cockpit_texture_id, snapshot);
 			cockpit_snapshot_seq = cockpit_texture_seq;
 		}
@@ -617,7 +626,7 @@ void load_window_state() {
 	cockpit_window_limit = 0;
 	cockpit_aircraft_known = false;
 	char texturefile[SAFE_PATH_LENGTH];
-	sprintf(texturefile, "%s\\%s.tex", plugin_path, cockpit_aircraft_filename);
+	sprintf(texturefile, "%s%s.tex", plugin_path, cockpit_aircraft_filename);
 	FILE *fp = fopen(texturefile, "rb");
 	if (fp == NULL) {
 		log_printf("Could not load texture data from file %s, this aircraft is unknown - writing a new config\n", texturefile);
