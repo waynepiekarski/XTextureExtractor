@@ -65,6 +65,32 @@ int   cockpit_window_limit = 0;
 extern void save_png(GLint texId, const char* output_name);
 
 
+
+// Assume base is correct, need to find search with a fuzzy case insensitive match
+#if LIN
+#include <dirent.h>
+std::string get_case_insensitive(std::string base, std::string search) {
+  // log_printf("Searching for base=[%s]+search[%s]\n", base.c_str(), search.c_str());
+  DIR *dir = opendir(base.c_str());
+  if (dir == NULL) { return ""; }
+  struct dirent* entry;
+  while((entry = readdir(dir))) {
+    if (!strcasecmp(search.c_str(), entry->d_name)) {
+      closedir(dir);
+      std::string found = base + PATH_SEP_STR + entry->d_name;
+      // log_printf("Found a case insensitive match [%s] from [%s]\n", found.c_str(), entry->d_name);
+      return found;
+    }
+  }
+  closedir(dir);
+  return "";
+}
+#else
+std::string get_case_insensitive(std::string base, std::string search) {
+  return base + PATH_SEP_STR + search;
+}
+#endif
+
 void detect_aircraft_panel(char* acfpath) {
 	log_printf("Finding panel texture for ACF path [%s]\n", acfpath);
 	char* path = acfpath;
@@ -77,16 +103,21 @@ void detect_aircraft_panel(char* acfpath) {
 
 	cockpit_panel_width = -1;
 	cockpit_panel_height = -1;
-	std::vector<const char*> dirs = { "cockpit_3d/-PANELS-", "cockpit/-PANELS-" };
+	std::vector<const char*> cockpit = { "cockpit_3d", "cockpit" };
+	std::vector<const char*> panels = { "-PANELS-" };
 	std::vector<const char*> names = { "panel.png", "Panel_General.png", "Panel_Airliner.png", "Panel_Fighter.png", "Panel_Glider.png", "Panel_Helo.png", "Panel_Autogyro.png", "Panel_General_IFR.png", "Panel_Autogyro_Twin.png", "Panel_Fighter_IFR.png" };
-	for (const char* d : dirs) {
-		for (const char* n : names) {
-			std::string testpath;
-			testpath += path;
-			testpath += "/";
-			testpath += d;
-			testpath += "/";
-			testpath += n;
+	for (const char* c : cockpit) {
+            for (const char* p : panels) {
+                for (const char* n : names) {
+		        // Leading acfpath is correct, but need to do a case-insensitive search for each of the sub-dirs we are looking for
+		        // log_printf("Searching for [%s] [%s] [%s] [%s]\n", path, c, p, n);
+		        std::string testpath = path;
+			testpath = get_case_insensitive(testpath, c);
+			if (testpath == "") { continue; }
+			testpath = get_case_insensitive(testpath, p);
+			if (testpath == "") { continue; }
+			testpath = get_case_insensitive(testpath, n);
+			if (testpath == "") { continue; }
 
 			log_printf("Testing for panel texture file [%s]\n", testpath.c_str());
 			std::vector<unsigned char> image;
@@ -99,6 +130,7 @@ void detect_aircraft_panel(char* acfpath) {
 				return;
 			}
 		}
+	  }
 	}
 	log_printf("Failed to find panel texture in [%s]\n", path);
 }
@@ -116,8 +148,6 @@ void detect_aircraft_filename(void) {
 	char filename[SAFE_PATH_LENGTH];
 	char path[SAFE_PATH_LENGTH];
 	XPLMGetNthAircraftModel(XPLM_USER_AIRCRAFT, filename, path);
-	strlwr(filename);
-	strlwr(path);
 	detect_aircraft_panel(path);
 
 	int result;
