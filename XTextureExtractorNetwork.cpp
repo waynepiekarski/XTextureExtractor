@@ -43,7 +43,7 @@ int last_cockpit_texture_seq = -2; // Track when the aircraft changes, and resta
 
 unsigned char sub_buffer[MAX_TEXTURE_WIDTH * MAX_TEXTURE_HEIGHT * 4]; // Ensure we definitely have enough space for 4-byte RGBA images of any supported size
 
-#if LIN
+#if LIN || APL
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -184,7 +184,7 @@ void TCPListenerFunction()
 		}
 		else {
 			int iOptVal = TCP_SEND_BUFFER; // Make sure this is very large to prevent WSAEWOULDBLOCK=10035 when the network gets clogged up
-#if LIN
+#if LIN || APL
 			socklen_t iOptLen = sizeof(int);
 #else
 			int iOptLen = sizeof(int);

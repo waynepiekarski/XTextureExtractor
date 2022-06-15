@@ -25,7 +25,7 @@
 #include <vector>
 using namespace std;
 #include "lodepng/lodepng.h"
-#if LIN
+#if LIN || APL
 #include <unistd.h>
 #endif
 
@@ -67,7 +67,7 @@ extern void save_png(GLint texId, const char* output_name);
 
 
 // Assume base is correct, need to find search with a fuzzy case insensitive match
-#if LIN
+#if LIN || APL
 #include <dirent.h>
 std::string get_case_insensitive(std::string base, std::string search) {
   // log_printf("Searching for base=[%s]+search[%s]\n", base.c_str(), search.c_str());
@@ -143,11 +143,35 @@ void string_lower(char* input) {
   }
 }
 
+#if APL
+void fix_apple_path(char* fix) {
+  // Apple gives filenames that look like "Macintosh HD:Users:username:path:64:mac.xpl" so fix this up to use Unix forward slashes
+  char mac_path[SAFE_PATH_LENGTH];
+  char *i = fix;
+  strcpy(mac_path, "/Volumes/");
+  char *o = mac_path + strlen(mac_path);
+  while (*i != '\0') {
+    if (*i == ':') {
+      *o = '/';
+    } else {
+      *o = *i;
+    }
+    i++;
+    o++;
+  }
+  strcpy(fix, mac_path);
+}
+#endif
+
 void detect_aircraft_filename(void) {
 	// https://developer.x-plane.com/sdk/XPLMGetNthAircraftModel/ defines filename as 256 and path as 512
 	char filename[SAFE_PATH_LENGTH];
 	char path[SAFE_PATH_LENGTH];
 	XPLMGetNthAircraftModel(XPLM_USER_AIRCRAFT, filename, path);
+#if APL
+	fix_apple_path(path);
+#endif
+
 	detect_aircraft_panel(path);
 
 	int result;
@@ -300,6 +324,9 @@ PLUGIN_API int XPluginStart(
 						char *		outDesc)
 {
 	XPLMGetPluginInfo(XPLMGetMyID(), NULL, plugin_path, NULL, NULL);
+#if APL
+	fix_apple_path(plugin_path);
+#endif
 	char *slash = strrchr(plugin_path, PATH_SEP_CHR); // Chop off the filename so we can get the path
 	if (slash != NULL) {
 		*slash = '\0';

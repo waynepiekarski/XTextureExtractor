@@ -36,7 +36,7 @@
 #endif
 #if LIN
 #include <GL/gl.h>
-#elif __GNUC__
+#elif APL
 #include <OpenGL/gl.h>
 #else
 #include <GL/gl.h>
@@ -55,7 +55,12 @@ static char __log_printf_buffer[4096];
 #define TCP_INTRO_HEADER   4096
 #define TCP_PROTOCOL_VERSION "XTEv3"
 #define PLUGIN_VERSION     "v3.0"
+#if APL
+// OSX does not support 10mb buffers
+#define TCP_SEND_BUFFER    5*1024*1024
+#else
 #define TCP_SEND_BUFFER    10*1024*1024
+#endif
 // Windows defines MAX_PATH as 260 and https://developer.x-plane.com/sdk/XPLMGetNthAircraftModel/ defines filename as 256 and path as 512
 // Define a safe path length which we can be sure exceeds all possible cases
 #define SAFE_PATH_LENGTH   4096
