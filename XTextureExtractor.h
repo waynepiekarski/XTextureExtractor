@@ -46,7 +46,7 @@
 #endif
 
 static char __log_printf_buffer[4096];
-#define log_printf(fmt, ...) snprintf(__log_printf_buffer, 4096, "XTextureExtractor-%s: " fmt, PLUGIN_VERSION, __VA_ARGS__), XPLMDebugString(__log_printf_buffer)
+#define log_printf(fmt, ...) if(true) snprintf(__log_printf_buffer, 4096, "XTextureExtractor-%s: " fmt, PLUGIN_VERSION, ##__VA_ARGS__), XPLMDebugString(__log_printf_buffer)
 
 #define COCKPIT_MAX_WINDOWS 20
 #define TCP_PLUGIN_PORT    "52500"

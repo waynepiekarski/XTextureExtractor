@@ -23,9 +23,11 @@
 #undef UNICODE
 #define WIN32_LEAN_AND_MEAN
 
+#if IBM
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <list>
@@ -34,13 +36,30 @@
 
 #include "XTextureExtractor.h"
 #include <vector>
-using namespace std;
+#include <thread>
 #include "lodepng/lodepng.h"
 
 int last_cockpit_texture_seq = -2; // Track when the aircraft changes, and restart the connection so we can resend the updated header
 
 unsigned char sub_buffer[MAX_TEXTURE_WIDTH * MAX_TEXTURE_HEIGHT * 4]; // Ensure we definitely have enough space for 4-byte RGBA images of any supported size
 
+#if LIN
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <sys/ioctl.h>
+#define SOCKET int
+#define INVALID_SOCKET -1
+#define SOCKET_ERROR -1
+#define WSAGetLastError() errno
+#define closesocket(fd) ::close(fd)
+#define ioctlsocket(fd, request, arg) ioctl(fd, request, arg)
+#define WSACleanup() { /* Do nothing on Linux */ }
+#define WSAEWOULDBLOCK EWOULDBLOCK
+#include <unistd.h>
+#define Sleep(ms) usleep((ms)*1000)
+#define ZeroMemory(ptr, sz) bzero(ptr, sz)
+#endif
 std::list<SOCKET> connections;
 char header[TCP_INTRO_HEADER];
 
@@ -57,10 +76,9 @@ void recompute_header() {
 	hptr += sprintf(hptr, "__EOF__\n");
 }
 
-DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
+void TCPListenerFunction()
 {
 	log_printf("Start of threaded TCP listener code\n");
-	WSADATA wsaData;
 	int iResult;
 
 	SOCKET ListenSocket = INVALID_SOCKET;
@@ -74,11 +92,14 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 	recompute_header();
 	last_cockpit_texture_seq = cockpit_texture_seq;
 
+#if IBM
+	WSADATA wsaData;
 	iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (iResult != 0) {
 		log_printf("Fatal: WSAStartup failed with error: %d\n", iResult);
-		return 1;
+		return;
 	}
+#endif
 
 	ZeroMemory(&hints, sizeof(hints));
 	hints.ai_family = AF_INET;
@@ -91,15 +112,15 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 	if (iResult != 0) {
 		log_printf("Fatal: getaddrinfo failed with error: %d\n", iResult);
 		WSACleanup();
-		return 1;
+		return;
 	}
 
-	ListenSocket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+	ListenSocket = ::socket(result->ai_family, result->ai_socktype, result->ai_protocol);
 	if (ListenSocket == INVALID_SOCKET) {
-		log_printf("Fatal: socket failed with error: %ld\n", WSAGetLastError());
+		log_printf("Fatal: socket failed with error: %d\n", WSAGetLastError());
 		freeaddrinfo(result);
 		WSACleanup();
-		return 1;
+		return;
 	}
 
 	iResult = bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
@@ -108,7 +129,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 		freeaddrinfo(result);
 		closesocket(ListenSocket);
 		WSACleanup();
-		return 1;
+		return;
 	}
 
 	freeaddrinfo(result);
@@ -119,7 +140,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 		log_printf("Fatal: setsockopt SO_REUSEADDR failed with error: %d\n", WSAGetLastError());
 		closesocket(ListenSocket);
 		WSACleanup();
-		return 1;
+		return;
 	}
 
 	iResult = listen(ListenSocket, SOMAXCONN);
@@ -127,7 +148,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 		log_printf("Fatal: listen failed with error: %d\n", WSAGetLastError());
 		closesocket(ListenSocket);
 		WSACleanup();
-		return 1;
+		return;
 	}
 
 	u_long non_block = 1;
@@ -136,7 +157,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 		log_printf("Fatal: failed to set non-blocking mode on listen socket: %d\n", WSAGetLastError());
 		closesocket(ListenSocket);
 		WSACleanup();
-		return 1;
+		return;
 	}
 
 	log_printf("Waiting for incoming TCP connections on port %s\n", TCP_PLUGIN_PORT);
@@ -151,7 +172,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 				log_printf("Fatal: accept failed with error: %d\n", WSAGetLastError());
 				closesocket(ListenSocket);
 				WSACleanup();
-				return 1;
+				return;
 			}
 
 			// If we don't have any connections, then lets sleep to rate limit this thread and loop around
@@ -163,7 +184,11 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 		}
 		else {
 			int iOptVal = TCP_SEND_BUFFER; // Make sure this is very large to prevent WSAEWOULDBLOCK=10035 when the network gets clogged up
+#if LIN
+			socklen_t iOptLen = sizeof(int);
+#else
 			int iOptLen = sizeof(int);
+#endif
 			iResult = setsockopt(newClientSocket, SOL_SOCKET, SO_SNDBUF, (char *)&iOptVal, iOptLen);
 			if (iResult == SOCKET_ERROR) {
 				log_printf("Fatal: failed to set SO_SNDBUF to %d: %d\n", TCP_SEND_BUFFER, WSAGetLastError());
@@ -171,7 +196,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 				for (auto s : connections)
 					closesocket(s);
 				WSACleanup();
-				return 1;
+				return;
 			}
 			iResult = getsockopt(newClientSocket, SOL_SOCKET, SO_SNDBUF, (char *)&iOptVal, &iOptLen);
 			if (iResult == SOCKET_ERROR) {
@@ -180,7 +205,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 				for (auto s : connections)
 					closesocket(s);
 				WSACleanup();
-				return 1;
+				return;
 			}
 
 			u_long non_block = 0;
@@ -191,7 +216,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 				for (auto s : connections)
 					closesocket(s);
 				WSACleanup();
-				return 1;
+				return;
 			}
 
 			log_printf("Accepted new connection, texture seq is %d, total connections is %zu, SO_SNDBUF is %d from %d\n", cockpit_texture_seq, connections.size(), iOptVal, TCP_SEND_BUFFER);
@@ -206,7 +231,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 				for (auto s : connections)
 					closesocket(s);
 				WSACleanup();
-				return 1;
+				return;
 			}
 			else {
 				// log_printf("Successfully sent header of %d bytes\n", TCP_INTRO_HEADER);
@@ -329,7 +354,7 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 				for (auto s : connections)
 					closesocket(s);
 				WSACleanup();
-				return 1;
+				return;
 			}
 			else {
 				// log_printf("Successfully sent PNG image of %dx%d with %d compressed bytes\n", cockpit_texture_width, cockpit_texture_height, iSendResult);
@@ -341,16 +366,9 @@ DWORD WINAPI TCPListenerFunction(LPVOID lpParam)
 	// Unreachable code - shut down everything
 	closesocket(ListenSocket);
 	WSACleanup();
-
-	return 0;
 }
 
 void start_networking_thread(void) {
-	CreateThread(
-		NULL,                   // default security attributes
-		0,                      // use default stack size  
-		TCPListenerFunction,       // thread function name
-		NULL,          // argument to thread function 
-		0,                      // use default creation flags 
-		NULL);   // returns the thread identifier 
+  std::thread networking_thread(TCPListenerFunction);
+  networking_thread.detach();
 }

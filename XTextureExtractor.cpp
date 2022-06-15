@@ -25,6 +25,9 @@
 #include <vector>
 using namespace std;
 #include "lodepng/lodepng.h"
+#if LIN
+#include <unistd.h>
+#endif
 
 
 // Set some arbitrary limit on the number of windows that can be supported
@@ -91,13 +94,21 @@ void detect_aircraft_panel(char* acfpath) {
 	log_printf("Failed to find panel texture in [%s]\n", path);
 }
 
+void strlwr(char* input) {
+  char* ptr = input;
+  while (*ptr != '\0') {
+    *ptr = tolower(*ptr);
+    ptr++;
+  }
+}
+
 void detect_aircraft_filename(void) {
 	// https://developer.x-plane.com/sdk/XPLMGetNthAircraftModel/ defines filename as 256 and path as 512
 	char filename[SAFE_PATH_LENGTH];
 	char path[SAFE_PATH_LENGTH];
 	XPLMGetNthAircraftModel(XPLM_USER_AIRCRAFT, filename, path);
-	_strlwr(filename);
-	_strlwr(path);
+	strlwr(filename);
+	strlwr(path);
 	detect_aircraft_panel(path);
 
 	int result;
@@ -113,7 +124,7 @@ void detect_aircraft_filename(void) {
 		else {
 			// Need to terminate the strings and convert to lower case
 			tailnum[result] = '\0';
-			_strlwr(tailnum);
+			strlwr(tailnum);
 		}
 	}
 
@@ -277,12 +288,12 @@ PLUGIN_API int XPluginStart(
 #endif
 
 	// Implement commands for all the buttons we support
-	XPLMRegisterCommandHandler(cmd_texture_button = XPLMCreateCommand("XTE/newscan", "XTextureExtractor New Scan"), handle_command, 1, "New Scan");
-	XPLMRegisterCommandHandler(cmd_load_button  = XPLMCreateCommand("XTE/load", "XTextureExtractor Load"),  handle_command, 1, "Load");
-	XPLMRegisterCommandHandler(cmd_save_button  = XPLMCreateCommand("XTE/save", "XTextureExtractor Save"),  handle_command, 1, "Save");
-	XPLMRegisterCommandHandler(cmd_clear_button = XPLMCreateCommand("XTE/clear", "XTextureExtractor Clear"), handle_command, 1, "Clear");
-	XPLMRegisterCommandHandler(cmd_hide_button  = XPLMCreateCommand("XTE/hide", "XTextureExtractor Hide"),  handle_command, 1, "Hide");
-	XPLMRegisterCommandHandler(cmd_plugin_button = XPLMCreateCommand("XTE/plugin", "XTextureExtractor Reload Plugins"), handle_command, 1, "Reload Plugins");
+	XPLMRegisterCommandHandler(cmd_texture_button = XPLMCreateCommand("XTE/newscan", "XTextureExtractor New Scan"), handle_command, 1, (void*)"New Scan");
+	XPLMRegisterCommandHandler(cmd_load_button  = XPLMCreateCommand("XTE/load", "XTextureExtractor Load"),  handle_command, 1, (void*)"Load");
+	XPLMRegisterCommandHandler(cmd_save_button  = XPLMCreateCommand("XTE/save", "XTextureExtractor Save"),  handle_command, 1, (void*)"Save");
+	XPLMRegisterCommandHandler(cmd_clear_button = XPLMCreateCommand("XTE/clear", "XTextureExtractor Clear"), handle_command, 1, (void*)"Clear");
+	XPLMRegisterCommandHandler(cmd_hide_button  = XPLMCreateCommand("XTE/hide", "XTextureExtractor Hide"),  handle_command, 1, (void*)"Hide");
+	XPLMRegisterCommandHandler(cmd_plugin_button = XPLMCreateCommand("XTE/plugin", "XTextureExtractor Reload Plugins"), handle_command, 1, (void*)"Reload Plugins");
 
 	return 1;
 }
@@ -555,7 +566,11 @@ void clear_window_state() {
 	char filename[SAFE_PATH_LENGTH];
 	sprintf(filename, "windowcockpit-%s.txt", cockpit_aircraft_name);
 	log_printf("Removing window save file %s\n", filename);
+#ifdef IBM
 	_unlink(filename);
+#else
+	unlink(filename);
+#endif
 }
 
 void save_window_state() {
