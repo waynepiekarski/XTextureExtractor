@@ -614,17 +614,6 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 			texture_pointer = texture_buffer;
 			// log_printf("Captured texture buffer, ready for transmission\n");
 		}
-	} else {
-		// Draw an X on the window for unknown aircraft
-		// Note that it shows up as black since the texture units are active, but I don't want to change this
-		float red[] = { 1.0, 0.0, 0.0, 1.0 };
-		glColor4fv(red);
-		glBegin(GL_LINES);
-		glVertex2i(l, t - topInset); // Top left
-		glVertex2i(r, b);            // Bottom right
-		glVertex2i(r, t - topInset); // Top right
-		glVertex2i(l, b);            // Bottom left
-		glEnd();
 	}
 }
 
