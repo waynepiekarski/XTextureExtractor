@@ -135,7 +135,7 @@ void detect_aircraft_panel(char* acfpath) {
 	log_printf("Failed to find panel texture in [%s]\n", path);
 }
 
-void strlwr(char* input) {
+void string_lower(char* input) {
   char* ptr = input;
   while (*ptr != '\0') {
     *ptr = tolower(*ptr);
@@ -163,7 +163,7 @@ void detect_aircraft_filename(void) {
 		else {
 			// Need to terminate the strings and convert to lower case
 			tailnum[result] = '\0';
-			strlwr(tailnum);
+			string_lower(tailnum);
 		}
 	}
 
