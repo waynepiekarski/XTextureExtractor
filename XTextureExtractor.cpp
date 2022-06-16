@@ -54,7 +54,7 @@ char  cockpit_save_string[32];
 int   cockpit_window_limit = 0;
 
 // Cannot just use forward slash everywhere because we use strrchr on path names from the OS
-#ifdef WIN
+#if IBM
 #define PATH_SEP_CHR '\\'
 #define PATH_SEP_STR "\\"
 #else
