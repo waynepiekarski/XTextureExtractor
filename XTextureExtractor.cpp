@@ -468,13 +468,14 @@ void save_png(GLint texId, const char* output_name = "texture_save.png")
 }
 
 
-void draw_texture_rect(int leftX, int topY, int rightX, int botY, int maxX, int maxY, int l, int t, int r, int b) {
+// (0,0) is in the bottom-left, top>bottom, right>left, and +Y is upwards
+void draw_texture_lbrt(int leftX, int botY, int rightX, int topY, int maxX, int maxY, int l, int b, int r, int t) {
 	XPLMBindTexture2d(cockpit_texture_id, 0);
 	glBegin(GL_QUADS);
-	glTexCoord2f( leftX / (float)maxX, (maxY - topY) / (float)maxY);  glVertex2i(l, t); // Top left
-	glTexCoord2f(rightX / (float)maxX, (maxY - topY) / (float)maxY);  glVertex2i(r, t); // Top right
-	glTexCoord2f(rightX / (float)maxX, (maxY - botY) / (float)maxY);  glVertex2i(r, b); // Bottom right
-	glTexCoord2f( leftX / (float)maxX, (maxY - botY) / (float)maxY);  glVertex2i(l, b); // Bottom left
+	glTexCoord2f( leftX / (float)maxX, (maxY - topY) / (float)maxY);  glVertex2i(l, b);
+	glTexCoord2f( leftX / (float)maxX, (maxY - botY) / (float)maxY);  glVertex2i(l, t);
+	glTexCoord2f(rightX / (float)maxX, (maxY - botY) / (float)maxY);  glVertex2i(r, t);
+	glTexCoord2f(rightX / (float)maxX, (maxY - topY) / (float)maxY);  glVertex2i(r, b);
 	glEnd();
 }
 
@@ -583,12 +584,16 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 	}
 
 	int *g_texture_lbrt = &_g_texture_lbrt[win_num][0];
-	int topInset = 20;
-	int sideInset = 0;
+	int topInset = 20; // Include space for the UI buttons
+	int sideInset = -10; // Remove the X-Plane default 10 pixel border
 	if (!decorateWindows) {
-		topInset = -40;
-		sideInset = 10;
+		// Remove all decorations and draw to the edge of the window, X-Plane adds a 10 pixel border to every window so we need to remove this with negative numbers
+		topInset = -10;
+		sideInset = -10;
 	}
+	// Set to the size of the debug border you always want to see, use +1 for debugging to check you aren't losing any of the texture
+	// topInset += 1;
+	// sideInset += 1;
 
 	if (cockpit_aircraft_known) {
 		// If this is the first time we've seen the texture since the aircraft was loaded then we should save a PNG for debugging
@@ -600,8 +605,16 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 			cockpit_snapshot_seq = cockpit_texture_seq;
 		}
 
-		// Draw the texture to the window
-		draw_texture_rect(g_texture_lbrt[0], g_texture_lbrt[1], g_texture_lbrt[2], g_texture_lbrt[3], cockpit_texture_width, cockpit_texture_height, l - sideInset, t - topInset, r + sideInset, b - sideInset);
+		/*
+		log_printf("TextureCoords: L=%d, B=%d, R=%d, T=%d - 2DCoords: L=%d, B=%d, R=%d, T=%d - Insets: side=%d, top=%d\n",
+			g_texture_lbrt[0], g_texture_lbrt[1], g_texture_lbrt[2], g_texture_lbrt[3],
+			l + sideInset, b + sideInset, r - sideInset, t - topInset,
+			sideInset, topInset);
+		*/
+		// Draw the texture to the window, (0,0) is in the bottom-left and +ve is upward, so top > bottom
+		draw_texture_lbrt(g_texture_lbrt[0], g_texture_lbrt[1], g_texture_lbrt[2], g_texture_lbrt[3],
+			cockpit_texture_width, cockpit_texture_height,
+			l + sideInset, b + sideInset, r - sideInset, t - topInset);
 
 		// Check to see if we need to prepare a new texture image to send, only capture a new one if the previous has been consumed
 		if (texture_pointer == NULL) {
