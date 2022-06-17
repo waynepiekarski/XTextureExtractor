@@ -40,6 +40,7 @@ GLint cockpit_texture_format = -1;
 GLint cockpit_texture_last = 3000; // This is the starting point for our texture search, it needs to be higher than any texture id and I can't query for it
 GLint cockpit_texture_jump = 1000; // Whenever the aircraft switches, bump up the last texture id, because this plugin seems to cause texture ids to exceed, not sure what the limit is here
 int   cockpit_texture_seq = -1;     // Increment this each time we change aircraft or textures, so we can restart the network connection
+int   cockpit_texture_draw = 0;     // Number of times the active texture has been drawn
 bool  cockpit_dirty = false;
 bool  cockpit_aircraft_known = false;
 char  cockpit_aircraft_name[256];
@@ -260,6 +261,7 @@ int panel_callback(XPLMDrawingPhase inPhase, int inIsBefore, void *inRefcon)
 
 				// Indicate that we have switched to a new texture now and it is active, the network thread is looking for this
 				cockpit_texture_seq++;
+				cockpit_texture_draw = 0;
 
 				if (!network_started) {
 					log_printf("Texture is found, starting network thread to listen for XTextureExtractor clients\n");
@@ -597,13 +599,15 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 
 	if (cockpit_aircraft_known) {
 		// If this is the first time we've seen the texture since the aircraft was loaded then we should save a PNG for debugging
-		// Do this immediately so we get the colored background included, it helps by showing magenta around each of the instruments
-		if ((cockpit_texture_id > 0) && (cockpit_snapshot_seq != cockpit_texture_seq)) {
+		// The texture seems to be built up over a number of frames in some aircraft, so use >10 for safety so we capture an accurate texture
+		if ((cockpit_texture_id > 0) && (cockpit_snapshot_seq != cockpit_texture_seq) && (cockpit_texture_draw > 10)) {
 			char snapshot[SAFE_PATH_LENGTH];
 			sprintf(snapshot, "%s%c%s.tex.png", plugin_path, PATH_SEP_CHR, cockpit_aircraft_filename);
 			save_png(cockpit_texture_id, snapshot);
 			cockpit_snapshot_seq = cockpit_texture_seq;
 		}
+		// Keep track of the number of times we draw the texture
+		cockpit_texture_draw++;
 
 		/*
 		log_printf("TextureCoords: L=%d, B=%d, R=%d, T=%d - 2DCoords: L=%d, B=%d, R=%d, T=%d - Insets: side=%d, top=%d\n",
