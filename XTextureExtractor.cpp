@@ -857,13 +857,15 @@ int	handle_mouse(XPLMWindowID in_window_id, int x, int y, XPLMMouseStatus is_dow
 			XPLMBringWindowToFront(in_window_id);
 		}
 
-		if(coord_in_rect(x, y, _g_pop_button_lbrt[win_num])) // user clicked the pop-in/pop-out button
+		if(coord_in_rect(x, y, _g_pop_button_lbrt[win_num]))
 		{
 			XPLMSetWindowPositioningMode(in_window_id, is_popped_out ? xplm_WindowPositionFree : xplm_WindowPopOut, 0);
 		}
-		else if(coord_in_rect(x, y, _g_texture_button_lbrt[win_num])) // user clicked the "texture info button" button
+		else if(coord_in_rect(x, y, _g_texture_button_lbrt[win_num]))
 		{
-			log_printf("Ignoring texture info button\n");
+			// Re-scan for the texture if there was some problem, some aircraft take extra time to get ready
+			cockpit_dirty = true;
+			load_window_state();
 		}
 		else if (coord_in_rect(x, y, _g_load_button_lbrt[win_num])) {
 			load_window_state();
@@ -922,6 +924,11 @@ int handle_command(XPLMCommandRef cmd_id, XPLMCommandPhase phase, void * in_refc
 			// If plugins won't unload clear our registry entries for win.xpl in HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers
 			log_printf("Reloading all X-Plane plugins with XPLMReloadPlugins()\n");
 			XPLMReloadPlugins();
+		}
+		else if (cmd_id == cmd_texture_button) {
+			// Re-scan for the texture if there was some problem, some aircraft take extra time to get ready
+			cockpit_dirty = true;
+			load_window_state();
 		}
 		else {
 			log_printf("Ignoring unknown command\n");
