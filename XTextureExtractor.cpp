@@ -333,7 +333,7 @@ PLUGIN_API int XPluginStart(
 	} else {
 		log_printf("The XPLMGetPluginInfo returned did not contain " PATH_SEP_STR "64" PATH_SEP_STR "win.xpl as expected [%s]\n", plugin_path);
 	}
-	strcat(plugin_path, PATH_SEP_STR ".." PATH_SEP_STR);
+	strcat(plugin_path, PATH_SEP_STR "..");
 
 	strcpy(outName, "XTextureExtractorPlugin");
 	strcpy(outSig, "net.waynepiekarski.windowcockpitplugin");
@@ -600,7 +600,7 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		// Do this immediately so we get the colored background included, it helps by showing magenta around each of the instruments
 		if ((cockpit_texture_id > 0) && (cockpit_snapshot_seq != cockpit_texture_seq)) {
 			char snapshot[SAFE_PATH_LENGTH];
-			sprintf(snapshot, "%s%s.tex.png", plugin_path, cockpit_aircraft_filename);
+			sprintf(snapshot, "%s%c%s.tex.png", plugin_path, PATH_SEP_CHR, cockpit_aircraft_filename);
 			save_png(cockpit_texture_id, snapshot);
 			cockpit_snapshot_seq = cockpit_texture_seq;
 		}
@@ -684,14 +684,23 @@ void load_window_state() {
 	// Read in the new aircraft configuration file
 	cockpit_window_limit = 0;
 	cockpit_aircraft_known = false;
-	char texturefile[SAFE_PATH_LENGTH];
-	sprintf(texturefile, "%s%s.tex", plugin_path, cockpit_aircraft_filename);
-	FILE *fp = fopen(texturefile, "rb");
+	char texfile[SAFE_PATH_LENGTH];
+	sprintf(texfile, "%s.tex", cockpit_aircraft_filename);
+#if LIN || APL
+	std::string texpath = get_case_insensitive(plugin_path, texfile);
+	if (texpath == "") {
+	  // No existing tex file, so we need to construct a name so it can be created later on
+	  texpath = std::string(plugin_path) + PATH_SEP_STR + texfile;
+	}
+#else
+	std::string texpath = std::string(plugin_path) + PATH_SEP_STR + texfile;
+#endif
+	FILE *fp = fopen(texpath.c_str(), "rb");
 	if (fp == NULL) {
-		log_printf("Could not load texture data from file %s, this aircraft is unknown - writing a new config\n", texturefile);
-		fp = fopen(texturefile, "wb");
+	        log_printf("Could not load texture data from file %s, this aircraft is unknown - writing a new config\n", texpath.c_str());
+		fp = fopen(texpath.c_str(), "wb");
 		if (fp == NULL) {
-			log_printf("Could not write to texture file %s - skipping auto config", texturefile);
+		        log_printf("Could not write to texture file %s - skipping auto config", texpath.c_str());
 			return;
 		}
 		// Auto generate a new config so the user can edit it later
@@ -703,12 +712,12 @@ void load_window_state() {
 		fprintf(fp, "ALL 0 0 %d %d\n", cockpit_panel_width - 1, cockpit_panel_height - 1);
 		fclose(fp);
 		// Open up the generated config so the following steps work
-		fp = fopen(texturefile, "rb");
+		fp = fopen(texpath.c_str(), "rb");
 		if (fp == NULL) {
-			log_printf("Could not open generated texture file %s - should not happen\n", texturefile);
+		        log_printf("Could not open generated texture file %s - should not happen\n", texpath.c_str());
 		}
 	} else {
-		log_printf("Loading XTextureExtractor state from %s\n", texturefile);
+	        log_printf("Loading XTextureExtractor state from %s\n", texpath.c_str());
 	}
 	char buffer[1024];
 	char *result = fgets(buffer, 1024, fp);
