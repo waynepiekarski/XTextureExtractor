@@ -721,30 +721,47 @@ void load_window_state() {
 	        log_printf("Loading XTextureExtractor state from %s\n", texpath.c_str());
 	}
 	char buffer[1024];
-	char *result = fgets(buffer, 1024, fp);
-	if (result == NULL) {
-		log_printf("Failed to read first line from file, aborting reading\n");
-		fclose(fp);
-		return;
-	}
-	// Previously we required the texture width, height, and format but we now extract this from -PANELS- automatically. But still
-	// allow these extra values to be present in the file without an error condition for backwards compatibility.
-	if (sscanf(buffer, "%s", cockpit_aircraft_name) != 1) {
-		log_printf("Failed to read texture description from file, aborting reading\n");
-		fclose(fp);
-		return;
-	}
-	cockpit_texture_width = cockpit_panel_width;
-	cockpit_texture_height = cockpit_panel_height;
-	cockpit_texture_format = 32856; // All panel textures always have this format, so just hard code it
-	log_printf("Read in [%s] = max(%d,%d) format(%d)\n", cockpit_aircraft_name, cockpit_texture_width, cockpit_texture_height, cockpit_texture_format);
+	while (true) {
+		char *result = fgets(buffer, 1024, fp);
+		if (result == NULL) {
+			log_printf("Failed to find file header, aborting reading\n");
+			fclose(fp);
+			return;
+		}
+		if (result[0] == '#') {
+			// Skip commented out line
+			log_printf("Skipping comment [%s]\n", buffer);
+			continue;
+		}
 
-	if ((cockpit_texture_width < 0 || cockpit_texture_width > MAX_TEXTURE_WIDTH || cockpit_texture_height < 0 || cockpit_texture_height > MAX_TEXTURE_HEIGHT)) {
-		log_printf("Read texture dimensions %dx%d is out of bounds 0x0..%dx%d\n", cockpit_texture_width, cockpit_texture_height, MAX_TEXTURE_WIDTH, MAX_TEXTURE_HEIGHT);
-		fclose(fp);
-		return;
+		// Previously we required the texture width, height, and format but we now extract this from -PANELS- automatically.
+		// There are some aircraft which have changed their panel dimensions over time with the same .acf name, so look through
+		// the file until we find the dimensions that match in a header string.
+		if (sscanf(buffer, "%s %d %d %d", cockpit_aircraft_name, &cockpit_texture_width, &cockpit_texture_height, &cockpit_texture_format) != 4) {
+			log_printf("Did not see texture description [%s], skipping to next line\n", buffer);
+			continue;
+		}
+		// All panel textures always have 32856 format, so just hard code it
+		if (cockpit_texture_format != 32856) {
+			log_printf("Skipping window line [%s] since all texture definitions start with 32856\n", buffer);
+			continue;
+		}
+		log_printf("Read in [%s] = max(%d,%d) format(%d)\n", cockpit_aircraft_name, cockpit_texture_width, cockpit_texture_height, cockpit_texture_format);
+		if ((cockpit_texture_width < 0 || cockpit_texture_width > MAX_TEXTURE_WIDTH || cockpit_texture_height < 0 || cockpit_texture_height > MAX_TEXTURE_HEIGHT)) {
+			log_printf("Read texture dimensions %dx%d is out of bounds 0x0..%dx%d\n", cockpit_texture_width, cockpit_texture_height, MAX_TEXTURE_WIDTH, MAX_TEXTURE_HEIGHT);
+			continue;
+		}
+		if ((cockpit_texture_width != cockpit_panel_width) ||
+			(cockpit_texture_height != cockpit_panel_height) ||
+			(cockpit_texture_format != 32856)) {
+			log_printf("Did not find match with this header to panel (%d,%d)=32856, so skipping\n", cockpit_panel_width, cockpit_panel_height);
+			continue;
+		}
+
+		// Found a header in the .tex file that matches the expected dimensions, continue processing the rest of the file
+		cockpit_aircraft_known = true;
+		break;
 	}
-	cockpit_aircraft_known = true;
 
 	int i = 0;
 	while (i < COCKPIT_MAX_WINDOWS) {
@@ -758,7 +775,10 @@ void load_window_state() {
 			log_printf("Skipping line [%s]\n", buffer);
 			continue;
 		}
-		
+		if (strstr(result, "---") == result) {
+			log_printf("Reached ending ---, finished reading with %d successful textures\n", cockpit_window_limit);
+			break;
+		}
 		if (sscanf(buffer, "%s %d %d %d %d", _g_window_name[i], &_g_texture_lbrt[i][0], &_g_texture_lbrt[i][1], &_g_texture_lbrt[i][2], &_g_texture_lbrt[i][3]) != 5) {
 			log_printf("Reached failed sscanf read [%s], finished reading with %d successful textures\n", buffer, cockpit_window_limit);
 			break;
