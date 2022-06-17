@@ -54,7 +54,7 @@ static char __log_printf_buffer[4096];
 #define MAX_TEXTURE_HEIGHT 4096
 #define TCP_INTRO_HEADER   4096
 #define TCP_PROTOCOL_VERSION "XTEv3"
-#define PLUGIN_VERSION     "v3.1"
+#define PLUGIN_VERSION     "v3.2"
 #if APL
 // OSX does not support 10mb buffers
 #define TCP_SEND_BUFFER    5*1024*1024
