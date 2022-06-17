@@ -410,12 +410,17 @@ PLUGIN_API int XPluginEnable(void) {
 PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFrom, int inMsg, void * inParam)
 {
 	// log_printf("XPluginReceiveMessage XTextureExtractor: inFrom=%d, inMsg=%d, inParam=%p\n", inFrom, inMsg, inParam);
-	if (inMsg == 103) {
-		// Seems like 103 is sent just when the aircraft is finished loading, we can try grabbing the texture here
-		log_printf("XPluginReceiveMessage: Found event inMsg=103, lets try to load window properties and increasing last texture id by %d to %d\n", cockpit_texture_jump, cockpit_texture_last + cockpit_texture_jump);
+	if (inMsg == XPLM_MSG_AIRPORT_LOADED) {
+		// Seems like XPLM_MSG_AIRPORT_LOADED=103 is sent just when the aircraft is finished loading, we can try grabbing the texture here
+		log_printf("XPluginReceiveMessage: Found event %d XPLM_MSG_AIRPORT_LOADED, lets try to load window properties and increasing last texture id by %d to %d\n", inMsg, cockpit_texture_jump, cockpit_texture_last + cockpit_texture_jump);
 		cockpit_dirty = true;
 		cockpit_texture_last += cockpit_texture_jump;
 		load_window_state();
+	} else if (inMsg == XPLM_MSG_PLANE_LOADED) {
+		// PLANE_LOADED happens before AIRPORT_LOADED, so do not use
+		log_printf("XPluginReceiveMessage: Found event %d XPLM_MSG_PLANE_LOADED - not used\n", inMsg);
+	} else {
+		log_printf("XPluginReceiveMessage: Found event %d XPLM_MSG_* - not used\n", inMsg);
 	}
 }
 
