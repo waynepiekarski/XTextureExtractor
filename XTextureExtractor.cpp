@@ -301,6 +301,7 @@ XPLMCommandRef cmd_load_button = NULL;
 XPLMCommandRef cmd_save_button = NULL;
 XPLMCommandRef cmd_clear_button = NULL;
 XPLMCommandRef cmd_hide_button = NULL;
+XPLMCommandRef cmd_png_button = NULL;
 XPLMCommandRef cmd_plugin_button = NULL;
 
 char _g_window_name[COCKPIT_MAX_WINDOWS][256];  // titles of each window
@@ -361,6 +362,7 @@ PLUGIN_API int XPluginStart(
 	XPLMRegisterCommandHandler(cmd_save_button  = XPLMCreateCommand("XTE/save", "XTextureExtractor Save"),  handle_command, 1, (void*)"Save");
 	XPLMRegisterCommandHandler(cmd_clear_button = XPLMCreateCommand("XTE/clear", "XTextureExtractor Clear"), handle_command, 1, (void*)"Clear");
 	XPLMRegisterCommandHandler(cmd_hide_button  = XPLMCreateCommand("XTE/hide", "XTextureExtractor Hide"),  handle_command, 1, (void*)"Hide");
+	XPLMRegisterCommandHandler(cmd_png_button   = XPLMCreateCommand("XTE/png", "XTextureExtractor Texture PNG"), handle_command, 1, (void*)"PNG");
 	XPLMRegisterCommandHandler(cmd_plugin_button = XPLMCreateCommand("XTE/plugin", "XTextureExtractor Reload Plugins"), handle_command, 1, (void*)"Reload Plugins");
 
 	return 1;
@@ -383,6 +385,7 @@ PLUGIN_API void	XPluginStop(void)
 	if (cmd_save_button != NULL) XPLMUnregisterCommandHandler(cmd_save_button, handle_command, 0, 0); cmd_save_button = NULL;
 	if (cmd_clear_button != NULL) XPLMUnregisterCommandHandler(cmd_clear_button, handle_command, 0, 0); cmd_clear_button = NULL;
 	if (cmd_hide_button != NULL) XPLMUnregisterCommandHandler(cmd_hide_button, handle_command, 0, 0); cmd_hide_button = NULL;
+	if (cmd_png_button != NULL) XPLMUnregisterCommandHandler(cmd_png_button, handle_command, 0, 0); cmd_png_button = NULL;
 	if (cmd_plugin_button != NULL) XPLMUnregisterCommandHandler(cmd_plugin_button, handle_command, 0, 0); cmd_plugin_button = NULL;
 }
 
@@ -899,6 +902,15 @@ int handle_command(XPLMCommandRef cmd_id, XPLMCommandPhase phase, void * in_refc
 		else if (cmd_id == cmd_hide_button) {
 			decorateWindows = !decorateWindows;
 			log_printf("Inverting window decorations to %d\n", decorateWindows);
+		}
+		else if (cmd_id == cmd_png_button) {
+			if (cockpit_texture_id > 0) {
+				char snapshot[SAFE_PATH_LENGTH];
+				sprintf(snapshot, "%s%c%s.tex.png", plugin_path, PATH_SEP_CHR, cockpit_aircraft_filename);
+				save_png(cockpit_texture_id, snapshot);
+			} else {
+				log_printf("Cannot save invalid texture id\n");
+			}
 		}
 		else if (cmd_id == cmd_plugin_button) {
 			// https://developer.x-plane.com/2017/09/two-gotchas-developing-plugins/
