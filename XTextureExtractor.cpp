@@ -383,6 +383,7 @@ PLUGIN_API void	XPluginStop(void)
 	if (cmd_save_button != NULL) XPLMUnregisterCommandHandler(cmd_save_button, handle_command, 0, 0); cmd_save_button = NULL;
 	if (cmd_clear_button != NULL) XPLMUnregisterCommandHandler(cmd_clear_button, handle_command, 0, 0); cmd_clear_button = NULL;
 	if (cmd_hide_button != NULL) XPLMUnregisterCommandHandler(cmd_hide_button, handle_command, 0, 0); cmd_hide_button = NULL;
+	if (cmd_plugin_button != NULL) XPLMUnregisterCommandHandler(cmd_plugin_button, handle_command, 0, 0); cmd_plugin_button = NULL;
 }
 
 bool plugin_disabled = false;
