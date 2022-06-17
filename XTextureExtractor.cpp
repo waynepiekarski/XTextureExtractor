@@ -549,18 +549,6 @@ void draw(XPLMWindowID in_window_id, void * in_refcon)
 		DEFINE_BOX(g_hide_button_lbrt, g_clear_button_lbrt, "H");
 #undef DEFINE_BOX
 
-		// Draw the boxes around our rudimentary buttons
-		float green[] = {0.0, 1.0, 0.0, 1.0};
-		glColor4fv(green);
-#define DRAW_BOX(_array) glBegin(GL_LINE_LOOP), glVertex2i(_array[0], _array[3]), glVertex2i(_array[2], _array[3]), glVertex2i(_array[2], _array[1]), glVertex2i(_array[0], _array[1]), glEnd()
-		DRAW_BOX(g_pop_button_lbrt);
-		DRAW_BOX(g_texture_button_lbrt);
-		DRAW_BOX(g_load_button_lbrt);
-		DRAW_BOX(g_save_button_lbrt);
-		DRAW_BOX(g_clear_button_lbrt);
-		DRAW_BOX(g_hide_button_lbrt);
-#undef DRAW_BOX
-
 		// Draw the button text (pop in/pop out)
 		XPLMDrawString(col_white, g_pop_button_lbrt[0], g_pop_button_lbrt[1] + 4, (char *)pop_label, NULL, xplmFont_Proportional);
 
