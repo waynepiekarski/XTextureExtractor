@@ -1,6 +1,20 @@
+# Multi-texture file, each entry starts with NAME X Y 32856 and matches to detected texture
 FF757 2048 2048 32856
 ND       18  372  412  841
 HSI      18   11  418  319
 EICAS   442    7  926  412
 EICAS-2 943    9 1427  414
 MISC    434  420 1576  854
+---
+# The FF757 extended avionics edition uses 4096x4096 textures but the same .acf name
+FF757 4096 4096 32856
+HSI    2541 2043 3321 3054
+ND     3322 2043 4095 3054
+EICAS   433 2046  929 2462
+EICAS-2 938 2046 1433 2464
+# ALL       0    0 4095 4095
+---
+# Unused debug panel that is used to test the multi-texture parser
+# Should end all entries with --- but not required
+UNUSED757 512 512 32856
+---
