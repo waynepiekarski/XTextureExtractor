@@ -1,0 +1,36 @@
+// ---------------------------------------------------------------------
+//
+// XTextureExtractor
+//
+// Copyright (C) 2018-2022 Wayne Piekarski
+// wayne@tinmith.net http://tinmith.net/wayne
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+//
+// ---------------------------------------------------------------------
+
+Privacy policy for Google Play
+
+This application is open source, released under the GNU Public License version 3 (GPLv3).
+
+This application does not capture or upload any personally identifiable information. It makes a
+connection to X-Plane via a plugin interface, and only saves a manual IP address via the
+Android SharedPreferences API. No information is visible to the developer or uploaded
+to the internet. This application contains no ads, logging, telemetry, or anything else
+undesirable, it is truly free in both price and user freedom.
+
+I hope you enjoy this free open source application for your X-Plane flight simulator.
+
+Wayne Piekarski
+http://tinmith.net/wayne

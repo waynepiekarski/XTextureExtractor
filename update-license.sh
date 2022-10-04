@@ -2,7 +2,7 @@
 
 cd `dirname $0`
 
-for each in `find . -name "*.java" -o -name "*.cpp" -o -name "*.h" -o -name "*.kt" -o -name "README" | grep -v SDK | grep -v lodepng`; do
+for each in `find . -name "*.java" -o -name "*.cpp" -o -name "*.h" -o -name "*.kt" -o -name "README" -o -name "PRIVACY" | grep -v SDK | grep -v lodepng`; do
   # Need to determine if any license text exists before we try to change it
   SEPARATOR=" ---------------------------------------------------------------------"
   EXISTS=`grep -- "$SEPARATOR" $each`
