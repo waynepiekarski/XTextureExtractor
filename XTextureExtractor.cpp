@@ -737,25 +737,41 @@ void load_window_state() {
 		// Previously we required the texture width, height, and format but we now extract this from -PANELS- automatically.
 		// There are some aircraft which have changed their panel dimensions over time with the same .acf name, so look through
 		// the file until we find the dimensions that match in a header string.
-		if (sscanf(buffer, "%s %d %d %d", cockpit_aircraft_name, &cockpit_texture_width, &cockpit_texture_height, &cockpit_texture_format) != 4) {
+		char cockpit_texture_format_str[1024];
+		if (sscanf(buffer, "%s %d %d %s", cockpit_aircraft_name, &cockpit_texture_width, &cockpit_texture_height, &cockpit_texture_format_str) != 4) {
 			log_printf("Did not see texture description [%s], skipping to next line\n", buffer);
 			continue;
 		}
-		// All panel textures always have 32856 format, so just hard code it
-		if (cockpit_texture_format != 32856) {
-			log_printf("Skipping window line [%s] since all texture definitions start with 32856\n", buffer);
+		// All panel textures always have 32856 format, so just hard code it but use this string to encode other options
+		if (!strcmp(cockpit_texture_format_str, "OVERRIDE")) {
+			log_printf("Override option found [%s] so will not use panel texture dimensions\n", buffer);
+		} else if (strcmp(cockpit_texture_format_str,"32856")) {
+			log_printf("Skipping window line [%s] since all texture definitions start with 32856 or OVERRIDE\n", buffer);
 			continue;
 		}
+		cockpit_texture_format = 32856; // Force this value for backwards compatibility
 		log_printf("Read in [%s] = max(%d,%d) format(%d)\n", cockpit_aircraft_name, cockpit_texture_width, cockpit_texture_height, cockpit_texture_format);
 		if ((cockpit_texture_width < 0 || cockpit_texture_width > MAX_TEXTURE_WIDTH || cockpit_texture_height < 0 || cockpit_texture_height > MAX_TEXTURE_HEIGHT)) {
 			log_printf("Read texture dimensions %dx%d is out of bounds 0x0..%dx%d\n", cockpit_texture_width, cockpit_texture_height, MAX_TEXTURE_WIDTH, MAX_TEXTURE_HEIGHT);
 			continue;
 		}
-		if ((cockpit_texture_width != cockpit_panel_width) ||
-			(cockpit_texture_height != cockpit_panel_height) ||
-			(cockpit_texture_format != 32856)) {
-			log_printf("Did not find match with this header to panel (%d,%d)=32856, so skipping\n", cockpit_panel_width, cockpit_panel_height);
-			continue;
+
+		if (!strcmp(cockpit_texture_format_str, "OVERRIDE")) {
+			// The Laminar Cirrus SR22 has a panel.png 512x512 that does not match the actual texture 512x768 so provide OVERRIDE support in the .tex file for this and other aircraft
+			// where we can manually override the texture that is found.
+			if ((cockpit_texture_width != cockpit_panel_width) ||
+				(cockpit_texture_height != cockpit_panel_height)) {
+				log_printf("Detected panel (%d,%d) does not match OVERRIDE (%d,%d) so will use the value supplied in config file\n", cockpit_panel_width, cockpit_panel_height, cockpit_texture_width, cockpit_texture_height);
+				cockpit_panel_width = cockpit_texture_width;
+				cockpit_panel_height = cockpit_texture_height;
+			}
+		} else {
+			// This allows the .tex file to contain support for different texture sizes as the .acf files evolve over time
+			if ((cockpit_texture_width != cockpit_panel_width) ||
+				(cockpit_texture_height != cockpit_panel_height)) {
+				log_printf("Did not find match with this header to panel (%d,%d)=32856, so skipping\n", cockpit_panel_width, cockpit_panel_height);
+				continue;
+			}
 		}
 
 		// Found a header in the .tex file that matches the expected dimensions, continue processing the rest of the file
