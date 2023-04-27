@@ -738,7 +738,7 @@ void load_window_state() {
 		// There are some aircraft which have changed their panel dimensions over time with the same .acf name, so look through
 		// the file until we find the dimensions that match in a header string.
 		char cockpit_texture_format_str[1024];
-		if (sscanf(buffer, "%s %d %d %s", cockpit_aircraft_name, &cockpit_texture_width, &cockpit_texture_height, &cockpit_texture_format_str) != 4) {
+		if (sscanf(buffer, "%s %d %d %s", cockpit_aircraft_name, &cockpit_texture_width, &cockpit_texture_height, cockpit_texture_format_str) != 4) {
 			log_printf("Did not see texture description [%s], skipping to next line\n", buffer);
 			continue;
 		}
